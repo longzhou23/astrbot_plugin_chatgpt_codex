@@ -26,7 +26,7 @@ from .model_catalog import CodexModel, ModelCatalog, parse_models
 from .process_manager import CodexProcessManager
 from .session_store import SessionStore
 from .tool_bridge import ToolBridge
-from .usage.models import parse_token_usage_event
+from .usage.models import UsageSnapshot, parse_usage_snapshot_event
 from .usage.service import UsageService
 
 
@@ -54,6 +54,7 @@ class CodexService:
             self.data_dir / "usage.db",
             timezone_name=str(config.get("usage_timezone", "Asia/Shanghai") or "Asia/Shanghai"),
             retention_days=int(config.get("usage_retention_days", 365) or 0),
+            debug_enabled=bool(config.get("usage_debug", False)),
         )
         self._rpc: JsonlRpcClient | None = None
         self._rpc_lock = asyncio.Lock()
@@ -67,9 +68,12 @@ class CodexService:
         self._thread_sessions: dict[str, str] = {}
         self._thread_reused: dict[str, bool] = {}
         self._usage_by_session: dict[str, dict[str, Any]] = {}
+        self._usage_by_thread: dict[str, UsageSnapshot] = {}
         self._last_usage: dict[str, Any] | None = None
         self._last_turn: dict[str, Any] | None = None
-        self._usage_by_turn: dict[str, dict[str, Any] | None] = {}
+        self._usage_by_turn: dict[str, UsageSnapshot] = {}
+        self._active_turns: dict[str, str] = {}
+        self._turn_starting_threads: set[str] = set()
         # Only an ephemeral listener port is retained for browser OAuth.  The
         # authorization URL and its code/state query values are never stored.
         self._browser_callback_port: int | None = None
@@ -84,19 +88,13 @@ class CodexService:
         await self.usage.initialize()
 
     def update_usage_config(self) -> None:
-        self.usage.timezone_name = str(
-            self.config.get("usage_timezone", "Asia/Shanghai") or "Asia/Shanghai"
+        self.usage.update_config(
+            timezone_name=str(
+                self.config.get("usage_timezone", "Asia/Shanghai") or "Asia/Shanghai"
+            ),
+            retention_days=int(self.config.get("usage_retention_days", 365) or 0),
+            debug_enabled=bool(self.config.get("usage_debug", False)),
         )
-        try:
-            from zoneinfo import ZoneInfo
-
-            self.usage.zone = ZoneInfo(self.usage.timezone_name)
-        except Exception:
-            self.usage.timezone_name = "Asia/Shanghai"
-            from zoneinfo import ZoneInfo
-
-            self.usage.zone = ZoneInfo("Asia/Shanghai")
-        self.usage.retention_days = max(0, int(self.config.get("usage_retention_days", 365) or 0))
 
     def _load_runtime_settings(self) -> None:
         try:
@@ -160,18 +158,25 @@ class CodexService:
             if isinstance(value, dict):
                 self._rate_limits = value
         elif method == "thread/tokenUsage/updated":
-            usage = self._safe_usage(params.get("tokenUsage"))
-            _, turn_id, _ = parse_token_usage_event(params)
-            if turn_id:
-                self._usage_by_turn[turn_id] = usage
-            if usage:
-                thread_id = params.get("threadId")
-                session_key = (
-                    self._thread_sessions.get(thread_id) if isinstance(thread_id, str) else None
-                )
+            thread_id, turn_id, snapshot = parse_usage_snapshot_event(params)
+            if snapshot is None:
+                return
+            if thread_id:
+                self._usage_by_thread[thread_id] = snapshot
+                session_key = self._thread_sessions.get(thread_id)
                 if session_key:
-                    self._usage_by_session[session_key] = usage
-                self._last_usage = usage
+                    self._usage_by_session[session_key] = snapshot.as_dict()
+            if turn_id:
+                self._usage_by_turn[turn_id] = snapshot
+            self._last_usage = snapshot.as_dict()
+            if (turn_id and turn_id in self._active_turns) or (
+                thread_id and thread_id in self._turn_starting_threads
+            ):
+                return
+            # Resume/fork replay is a baseline only. It must update the durable
+            # snapshot but must never create a new usage record.
+            if thread_id:
+                await self.usage.observe_snapshot(snapshot)
 
     async def _connect(self) -> JsonlRpcClient:
         async with self._rpc_lock:
@@ -224,6 +229,9 @@ class CodexService:
             # they can be treated as active again.
             self._active_threads.clear()
             self._thread_sessions.clear()
+            self._active_turns.clear()
+            self._turn_starting_threads.clear()
+            self._usage_by_turn.clear()
             return rpc
 
     async def _request(
@@ -235,8 +243,10 @@ class CodexService:
         except CodexTransportError:
             if self._rpc is rpc:
                 self._rpc = None
-            self._active_threads.clear()
-            self._thread_sessions.clear()
+                self._active_threads.clear()
+                self._thread_sessions.clear()
+                self._active_turns.clear()
+                self._turn_starting_threads.clear()
             with contextlib.suppress(Exception):
                 await self.manager.stop()
             raise
@@ -457,40 +467,6 @@ class CodexService:
         canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    @staticmethod
-    def _safe_usage(value: Any) -> dict[str, Any] | None:
-        if not isinstance(value, dict):
-            return None
-        result: dict[str, Any] = {}
-        for scope in ("last", "total"):
-            breakdown = value.get(scope)
-            if not isinstance(breakdown, dict):
-                continue
-            safe = {
-                key: breakdown[key]
-                for key in (
-                    "cachedInputTokens",
-                    "inputTokens",
-                    "outputTokens",
-                    "reasoningOutputTokens",
-                    "totalTokens",
-                    "cacheWriteInputTokens",
-                )
-                if isinstance(breakdown.get(key), int) and breakdown[key] >= 0
-            }
-            if safe:
-                result[scope] = safe
-        if isinstance(value.get("modelContextWindow"), int):
-            result["modelContextWindow"] = value["modelContextWindow"]
-        last = result.get("last")
-        if isinstance(last, dict):
-            # cachedInputTokens is a breakdown of input accounting, not an
-            # additional quantity. Never add it to the authoritative total.
-            denominator = last.get("inputTokens", 0)
-            if denominator:
-                result["cacheRatio"] = last.get("cachedInputTokens", 0) / denominator
-        return result or None
-
     async def status(self) -> dict[str, Any]:
         account = await self.account_read(refresh=False)
         stale_removed = await self.sessions.cleanup(
@@ -647,6 +623,12 @@ class CodexService:
         return thread_id, False
 
     @staticmethod
+    def _safe_identifier(value: str | None) -> str | None:
+        if not isinstance(value, str) or not value:
+            return None
+        return value[:4] + "…" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
+
+    @staticmethod
     def _notification_turn_id(params: dict[str, Any]) -> str | None:
         turn_id = params.get("turnId")
         if isinstance(turn_id, str) and turn_id:
@@ -724,6 +706,20 @@ class CodexService:
                     + user_text
                     + "\n</astrbot_latest_user_message>"
                 )
+            tool_schema = self._tool_schema_json()
+            context_diagnostics = {
+                "kind": "estimated_context_composition",
+                "system_persona_chars": len(developer_instructions),
+                "conversation_history_chars": len(context_text) if not is_bootstrapped else 0,
+                "dynamic_context_chars": len(extra_text),
+                "latest_user_chars": len(user_text),
+                "tool_schema_json_bytes": len(tool_schema.encode("utf-8")),
+                "tools_enabled": len(self.tool_bridge.dynamic_tools())
+                if self.tool_bridge.enabled and self.config.get("enable_local_codex_tools", False)
+                else 0,
+                "exact_token_count": False,
+                "history_forwarded_to_codex": not is_bootstrapped,
+            }
             thread_id, _ = await self._thread_for(
                 session_key,
                 model=selected_model,
@@ -757,9 +753,10 @@ class CodexService:
             terminal = False
             completed_agent_items: list[dict[str, Any]] = []
             final_text = ""
-            last_turn_usage: dict[str, Any] | None = None
+            last_turn_snapshot: UsageSnapshot | None = None
             retry_count = 0
             turn_started_at = time.monotonic()
+            self._turn_starting_threads.add(thread_id)
             try:
                 params: dict[str, Any] = {
                     "threadId": thread_id,
@@ -779,6 +776,8 @@ class CodexService:
                     turn_id = turn.get("id")
                 if not isinstance(turn_id, str) or not turn_id:
                     raise CodexPluginError("Codex did not return a turn id")
+                self._active_turns[turn_id] = thread_id
+                self._turn_starting_threads.discard(thread_id)
                 await self.sessions.put(
                     session_key,
                     thread_id,
@@ -833,7 +832,9 @@ class CodexService:
                         )
                         raise classify_rpc_error(CodexRPCError(None, safe_error(error_text)))
                     if method == "thread/tokenUsage/updated":
-                        last_turn_usage = self._safe_usage(event_params.get("tokenUsage"))
+                        _, event_turn_id, snapshot = parse_usage_snapshot_event(event_params)
+                        if snapshot is not None and event_turn_id == turn_id:
+                            last_turn_snapshot = snapshot
                         continue
                     if method == "turn/completed":
                         turn = event_params.get("turn")
@@ -863,28 +864,44 @@ class CodexService:
                     prompt_version=prompt_version,
                     increment_turn=True,
                 )
-                usage = last_turn_usage or self._usage_by_turn.pop(turn_id, None)
-                try:
-                    await self.usage.collector.record_turn_usage(
-                        conversation_id=session_key,
-                        thread_id=thread_id,
-                        turn_id=turn_id,
-                        model=selected_model,
-                        reasoning_effort=self._effort,
-                        usage=usage.get("last") if isinstance(usage, dict) else None,
+                snapshot = last_turn_snapshot or self._usage_by_turn.pop(turn_id, None)
+                usage_diagnostic = None
+                if snapshot is not None:
+                    try:
+                        usage_diagnostic = await self.usage.record_turn_snapshot(
+                            conversation_id=session_key,
+                            thread_id=thread_id,
+                            turn_id=turn_id,
+                            model=selected_model,
+                            reasoning_effort=self._effort,
+                            snapshot=snapshot,
+                        )
+                    except Exception as exc:  # Usage must never break a completed answer.
+                        self.logger.warning(
+                            "Unable to persist Codex usage delta: %s", type(exc).__name__
+                        )
+                else:
+                    self.logger.warning(
+                        "Codex turn completed without thread token usage: thread=%s turn=%s",
+                        self._safe_identifier(thread_id),
+                        self._safe_identifier(turn_id),
                     )
-                except Exception as exc:  # Usage must never break a completed answer.
-                    self.logger.warning("Unable to persist Codex usage: %s", type(exc).__name__)
                 self._last_turn = {
                     "thread_reused": bool(self._thread_reused.get(session_key, False)),
                     "model": selected_model,
                     "reasoning_effort": self._effort,
                     "retry_count": retry_count,
                     "latency_ms": round((time.monotonic() - turn_started_at) * 1000, 1),
-                    "usage": usage,
+                    "usage": snapshot.as_dict() if snapshot else None,
+                    "usage_diagnostic": usage_diagnostic,
+                    "context_diagnostics": context_diagnostics,
                 }
                 yield {"kind": "final", "text": final_text}
             finally:
+                if turn_id:
+                    self._active_turns.pop(turn_id, None)
+                    self._usage_by_turn.pop(turn_id, None)
+                self._turn_starting_threads.discard(thread_id)
                 if turn_id and not terminal:
                     with contextlib.suppress(Exception):
                         await rpc.request(
@@ -909,4 +926,3 @@ class CodexService:
         self._thread_sessions.clear()
         await self.sessions.close()
         await self.usage.close()
-

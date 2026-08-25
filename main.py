@@ -44,6 +44,7 @@ CONFIG_DEFAULTS: dict[str, Any] = {
     "enable_local_codex_tools": False,
     "usage_timezone": "Asia/Shanghai",
     "usage_retention_days": 365,
+    "usage_debug": False,
 }
 
 CONFIG_RANGES: dict[str, tuple[int, int]] = {
@@ -190,6 +191,12 @@ class ChatgptCodexPlugin(Star):
             ["GET"],
             "Read official Codex account rate limits separately from local usage",
         )
+        self.context.register_web_api(
+            f"{web_prefix}/usage/turns",
+            self._web_usage_turns,
+            ["GET"],
+            "Read recent redacted per-turn Codex usage diagnostics",
+        )
         await self.service.initialize()
 
     @staticmethod
@@ -301,6 +308,13 @@ class ChatgptCodexPlugin(Star):
         except Exception as exc:
             return self._web_error(exc)
 
+    async def _web_usage_turns(self) -> dict[str, Any]:
+        try:
+            limit = max(1, min(200, self._query_int("limit", 20)))
+            return self._web_ok({"turns": await self.service.usage.recent_turns(limit)})
+        except Exception as exc:
+            return self._web_error(exc)
+
     def _config_snapshot(self) -> dict[str, Any]:
         return {
             key: self.config.get(key, default)
@@ -323,6 +337,7 @@ class ChatgptCodexPlugin(Star):
             "show_tool_status",
             "force_http_transport",
             "enable_local_codex_tools",
+            "usage_debug",
         }
         for key, value in payload.items():
             if key not in CONFIG_DEFAULTS:
@@ -370,7 +385,11 @@ class ChatgptCodexPlugin(Star):
                         self.service.manager.force_http_transport = bool(
                             self.config.get("force_http_transport", True)
                         )
-                        if "usage_timezone" in values or "usage_retention_days" in values:
+                        if (
+                            "usage_timezone" in values
+                            or "usage_retention_days" in values
+                            or "usage_debug" in values
+                        ):
                             self.service.update_usage_config()
                     restart_required = any(
                         key in values
@@ -513,6 +532,21 @@ class ChatgptCodexPlugin(Star):
         """Show local token usage; it is intentionally separate from /gpt quota."""
 
         value = str(period or "30d").lower()
+        if value == "reset":
+            checker = getattr(event, "is_admin", None)
+            if not callable(checker) or not checker():
+                yield event.plain_result("/gpt usage reset 仅管理员可用。")
+                return
+            try:
+                result = await self.service.usage.reset()
+                yield event.plain_result(
+                    "已重置当前 Usage 统计。\n"
+                    f"删除当前记录：{result.get('records', 0)}，快照：{result.get('snapshots', 0)}。\n"
+                    "历史 v1 记录未删除，仅保留为迁移审计数据。"
+                )
+            except Exception as exc:
+                yield event.plain_result(f"Usage 重置失败：{safe_error(exc)}")
+            return
         if value == "debug":
             checker = getattr(event, "is_admin", None)
             if not callable(checker) or not checker():
@@ -535,12 +569,13 @@ class ChatgptCodexPlugin(Star):
             lines = [
                 "ChatGPT Codex 本地 Usage（不是官方配额）",
                 f"时间范围：{summary['startDate']} 至 {summary['endDate']}（{summary['timezone']}）",
-                f"Total：{window.get('total_tokens') if window.get('total_tokens') is not None else 'Unavailable'}",
+                f"Processed total：{window.get('total_tokens') if window.get('total_tokens') is not None else 'Unavailable'}",
                 f"Input：{window.get('input_tokens') if window.get('input_tokens') is not None else 'Unavailable'}",
                 f"Cached input：{window.get('cached_input_tokens') if window.get('cached_input_tokens') is not None else 'Unavailable'}",
                 f"Output：{window.get('output_tokens') if window.get('output_tokens') is not None else 'Unavailable'}",
                 f"Reasoning：{window.get('reasoning_tokens') if window.get('reasoning_tokens') is not None else 'Unavailable'}",
                 f"Requests：{window.get('requests', 0)}",
+                "说明：Cached input 是 Input 的子集；Reasoning 是 Output 的分项，不会重复计入 Processed total。",
             ]
             yield event.plain_result("\n".join(lines))
         except Exception as exc:
@@ -562,4 +597,3 @@ class ChatgptCodexPlugin(Star):
             )
         except Exception as exc:
             yield event.plain_result(f"会话重置失败：{safe_error(exc)}")
-

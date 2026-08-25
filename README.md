@@ -83,13 +83,16 @@ The Usage tab and `/gpt usage` are a local aggregate, deliberately separate from
 
 - Official account limits come from `account/rateLimits/read` and are shown as rate-limit windows and reset times.
 - Local token usage is collected only after this plugin is installed and a completed Codex turn emits `thread/tokenUsage/updated`. The current protocol fields used are `tokenUsage.last.inputTokens`, `cachedInputTokens`, `outputTokens`, `reasoningOutputTokens`, and the authoritative `totalTokens`, together with the notification's `threadId` and `turnId`.
-- `tokenUsage.total` is a thread cumulative snapshot, so it is not counted as another request. A unique SQLite `turn_id` prevents duplicate accounting after reconnects or process restarts.
-- Records are stored at `data/plugin_data/astrbot_plugin_chatgpt_codex/usage.db` with a hashed conversation ID, UTC timestamp, configured local date, model, selected effort, numeric token counts, and request count. Prompts, responses, credentials, cookies, and raw events are not stored.
+- `tokenUsage.total` is a cumulative thread/session snapshot; each completed turn is persisted as a field-by-field delta from the previous snapshot. `tokenUsage.last` is the latest active-context snapshot and is used only for context diagnostics. A unique SQLite `turn_id` plus a durable `usage_snapshots` baseline prevents duplicate accounting after reconnects, resume replay, or process restarts.
+- Cached input is a subset of input, and reasoning output is a breakdown of output. Neither is added on top of the server-provided `totalTokens`. If one cumulative field moves backwards, that field is treated as a counter reset and the current value starts a new non-negative delta.
+- Records are stored at `data/plugin_data/astrbot_plugin_chatgpt_codex/usage.db` with a hashed conversation ID, UTC timestamp, configured local date, model, selected effort, numeric token deltas, context size, and request count. Prompts, responses, credentials, cookies, and raw events are not stored. Existing v1 records are moved to `usage_records_legacy_v1` during schema migration and are not silently mixed into the corrected totals.
 - Reasoning counts remain `Unavailable` when the server does not provide `reasoningOutputTokens`; the plugin never estimates tokens from text, context windows, or rate-limit percentages.
 
 The current installed Codex executable exposes the `GetAccountTokenUsageResponse` schema in generated protocol output, but does not expose a callable account-token-usage request/params entry. Therefore the dashboard does not fabricate historical account usage: its daily heatmap is based on the locally observed turn events. A future Codex release can add a separate official history adapter without changing the local schema.
 
-Settings include `usage_timezone` (default `Asia/Shanghai`) and `usage_retention_days` (default `365`, or `0` for forever). Heatmap levels are adaptive P20/P40/P60/P80 levels over the visible date range; tooltips retain exact values.
+Settings include `usage_timezone` (default `Asia/Shanghai`), `usage_retention_days` (default `365`, or `0` for forever), and `usage_debug` (default `false`). Heatmap levels are adaptive P20/P40/P60/P80 levels over the visible date range; tooltips retain exact values. The overview also shows recent per-turn numeric usage and context-window diagnostics without exposing identifiers, prompts, responses, or hidden reasoning.
+
+`/gpt usage debug` is an administrator-only redacted diagnostic command. It reports the accounting source, snapshot/delta semantics, counter-reset flags, schema version, and recent numeric events. `/gpt usage reset` clears corrected v2 records, baselines, and diagnostics while preserving the legacy v1 table for audit.
 
 `/gpt reset` removes the current AstrBot-to-Codex thread mapping. The next message starts a fresh Codex thread.
 
@@ -119,4 +122,3 @@ The tests are protocol-level tests and do not require a Codex binary or a live C
 - The MVP does not bridge AstrBot tools into Codex `dynamicTools`; doing so needs explicit user-visible approval semantics, a tool-call request handler, and tests against the exact current experimental protocol.
 - Codex executable availability, ChatGPT plan entitlements, regional access, quota behavior, and protocol details are external runtime dependencies. The model catalog and errors must be checked on the target machine.
 - Provider selection still uses AstrBot's Provider registry because that is the stable plugin integration point. It delegates Agent orchestration to Codex rather than emulating an OpenAI Chat API.
-

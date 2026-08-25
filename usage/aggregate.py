@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Iterable
-
+from collections.abc import Iterable
+from typing import Any
 
 NUMERIC_FIELDS = (
     "input_tokens",
@@ -10,6 +10,7 @@ NUMERIC_FIELDS = (
     "output_tokens",
     "reasoning_tokens",
     "total_tokens",
+    "cache_write_input_tokens",
 )
 
 
@@ -59,4 +60,3 @@ def heat_level(value: int, positive_values: list[int]) -> int:
 
     thresholds = [percentile(p) for p in (0.2, 0.4, 0.6, 0.8)]
     return 1 + sum(value > threshold for threshold in thresholds)
-

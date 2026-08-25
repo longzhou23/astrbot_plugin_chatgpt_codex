@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
 from ..usage.aggregate import heat_level
-from ..usage.models import TokenUsage, parse_token_usage_event
+from ..usage.models import (
+    TokenUsage,
+    UsageSnapshot,
+    calculate_delta,
+    parse_token_usage_event,
+    parse_usage_snapshot_event,
+)
 from ..usage.service import UsageService
+from ..usage.storage import UsageStorage
 
 
 class UsageTests(unittest.IsolatedAsyncioTestCase):
@@ -43,6 +51,124 @@ class UsageTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((thread_id, turn_id), ("thread-1", "turn-1"))
         self.assertEqual(usage, TokenUsage(100, 70, 20, 5, 120, None))
+
+    def test_parse_snapshot_keeps_total_and_last_separate(self) -> None:
+        thread_id, turn_id, snapshot = parse_usage_snapshot_event(
+            {
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "tokenUsage": {
+                    "last": {"inputTokens": 100, "totalTokens": 120},
+                    "total": {"inputTokens": 9000, "totalTokens": 10000},
+                    "modelContextWindow": 128000,
+                },
+            }
+        )
+        self.assertEqual((thread_id, turn_id), ("thread-1", "turn-1"))
+        self.assertEqual(snapshot.total.total_tokens, 10000)
+        self.assertEqual(snapshot.last.total_tokens, 120)
+        self.assertEqual(snapshot.model_context_window, 128000)
+
+    def test_delta_does_not_double_count_breakdowns(self) -> None:
+        delta = calculate_delta(
+            None,
+            TokenUsage(
+                input_tokens=120,
+                cached_input_tokens=100,
+                output_tokens=30,
+                reasoning_tokens=10,
+                total_tokens=150,
+            ),
+        )
+        self.assertEqual(delta.total_tokens, 150)
+        self.assertEqual(delta.cached_input_tokens, 100)
+        self.assertEqual(delta.reasoning_tokens, 10)
+
+    async def test_cumulative_snapshots_are_persisted_as_deltas(self) -> None:
+        def snapshot(total: int, turn: str) -> UsageSnapshot:
+            return UsageSnapshot(
+                total=TokenUsage(input_tokens=total, output_tokens=total // 100, total_tokens=total),
+                last=TokenUsage(input_tokens=100, total_tokens=100),
+                thread_id="thread-cumulative",
+                turn_id=turn,
+            )
+
+        for total, turn in ((14000, "t1"), (28700, "t2"), (43600, "t3")):
+            result = await self.service.record_turn_snapshot(
+                conversation_id="session",
+                thread_id="thread-cumulative",
+                turn_id=turn,
+                model="m",
+                reasoning_effort="auto",
+                snapshot=snapshot(total, turn),
+            )
+            self.assertTrue(result["persisted"])
+        summary = await self.service.summary(30)
+        self.assertEqual(summary["window"]["total_tokens"], 43600)
+        rows = await self.service.recent_turns(10)
+        self.assertEqual(sorted(row["total_tokens"] for row in rows), [14000, 14700, 14900])
+
+    async def test_duplicate_snapshot_does_not_advance_baseline(self) -> None:
+        snapshot = UsageSnapshot(
+            total=TokenUsage(input_tokens=100, total_tokens=100),
+            thread_id="thread-duplicate",
+            turn_id="turn-duplicate",
+        )
+        kwargs = {
+            "conversation_id": "session",
+            "thread_id": "thread-duplicate",
+            "turn_id": "turn-duplicate",
+            "model": "m",
+            "reasoning_effort": "auto",
+            "snapshot": snapshot,
+        }
+        first = await self.service.record_turn_snapshot(**kwargs)
+        second = await self.service.record_turn_snapshot(**kwargs)
+        self.assertTrue(first["persisted"])
+        self.assertTrue(second["duplicate"])
+        self.assertEqual((await self.service.summary(30))["window"]["requests"], 1)
+
+    async def test_counter_reset_starts_new_delta_without_negative_usage(self) -> None:
+        def make(total: int, turn: str) -> UsageSnapshot:
+            return UsageSnapshot(
+                total=TokenUsage(input_tokens=total, total_tokens=total),
+                thread_id="thread-reset",
+                turn_id=turn,
+            )
+
+        await self.service.record_turn_snapshot(
+            conversation_id="session", thread_id="thread-reset", turn_id="before",
+            model="m", reasoning_effort="auto", snapshot=make(44000, "before"),
+        )
+        result = await self.service.record_turn_snapshot(
+            conversation_id="session", thread_id="thread-reset", turn_id="after",
+            model="m", reasoning_effort="auto", snapshot=make(14000, "after"),
+        )
+        self.assertTrue(result["counter_reset"])
+        self.assertEqual((await self.service.summary(30))["window"]["total_tokens"], 58000)
+        row = (await self.service.recent_turns(1))[0]
+        self.assertEqual(row["total_tokens"], 14000)
+        self.assertEqual(row["counter_reset"], 1)
+
+    async def test_v1_migration_preserves_legacy_table(self) -> None:
+        path = Path(self.temp_dir.name) / "legacy.db"
+        with sqlite3.connect(path) as connection:
+            connection.execute("CREATE TABLE usage_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            connection.execute("INSERT INTO usage_meta VALUES('schema_version', '1')")
+            connection.execute(
+                "CREATE TABLE usage_records(id INTEGER PRIMARY KEY, timestamp INTEGER, local_date TEXT, "
+                "conversation_hash TEXT, thread_id TEXT, turn_id TEXT UNIQUE, model TEXT, "
+                "reasoning_effort TEXT, input_tokens INTEGER, cached_input_tokens INTEGER, "
+                "output_tokens INTEGER, reasoning_tokens INTEGER, total_tokens INTEGER, request_count INTEGER)"
+            )
+            connection.execute("INSERT INTO usage_records VALUES(1, 1, '2026-08-25', NULL, NULL, 'old', 'm', 'auto', 1, 0, 1, NULL, 2, 1)")
+            connection.commit()
+        storage = UsageStorage(path)
+        await storage.initialize()
+        debug = await storage.debug()
+        self.assertEqual(debug["schemaVersion"], 2)
+        self.assertEqual(debug["legacyRecords"], 1)
+        self.assertEqual((await storage.rows("2026-08-25", "2026-08-25")), [])
 
     async def test_deduplicates_turn_after_restart(self) -> None:
         kwargs = {
@@ -100,4 +226,3 @@ class UsageTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     asyncio.run(unittest.main())
-

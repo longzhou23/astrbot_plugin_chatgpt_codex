@@ -86,6 +86,10 @@
     "minimum": 0,
     "maximum": 3650,
     "default": 365
+  },
+  "usage_debug": {
+    "type": "bool",
+    "description": "记录脱敏的数值型 Usage 诊断，便于排查累计值、重复事件和计数器重置；不会记录提示词、回复或令牌。",
+    "default": false
   }
 }
-

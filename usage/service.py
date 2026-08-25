@@ -9,14 +9,25 @@ from zoneinfo import ZoneInfo
 
 from .aggregate import aggregate_by, aggregate_rows, heat_level
 from .collector import UsageCollector
-from .models import TokenUsage, UsageRecord
+from .models import (
+    TokenUsage,
+    UsageRecord,
+    UsageSnapshot,
+)
 from .storage import UsageStorage
 
 
 class UsageService:
-    """Shared service for commands, WebUI and the Codex turn side-channel."""
+    """Shared usage service with cumulative-snapshot accounting."""
 
-    def __init__(self, db_path: Path, *, timezone_name: str = "Asia/Shanghai", retention_days: int = 365) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        *,
+        timezone_name: str = "Asia/Shanghai",
+        retention_days: int = 365,
+        debug_enabled: bool = False,
+    ) -> None:
         try:
             self.zone = ZoneInfo(timezone_name)
             self.timezone_name = timezone_name
@@ -28,6 +39,7 @@ class UsageService:
         self.collector = UsageCollector(self)
         self._initialized = False
         self._last_cleanup = 0.0
+        self.debug_enabled = bool(debug_enabled)
 
     async def initialize(self) -> None:
         if not self._initialized:
@@ -36,6 +48,16 @@ class UsageService:
         if self.retention_days and time.time() - self._last_cleanup >= 86400:
             await self.storage.cleanup(int(time.time()) - self.retention_days * 86400)
             self._last_cleanup = time.time()
+
+    def update_config(self, *, timezone_name: str, retention_days: int, debug_enabled: bool) -> None:
+        self.timezone_name = str(timezone_name or "Asia/Shanghai")
+        try:
+            self.zone = ZoneInfo(self.timezone_name)
+        except Exception:
+            self.timezone_name = "Asia/Shanghai"
+            self.zone = ZoneInfo(self.timezone_name)
+        self.retention_days = max(0, int(retention_days or 0))
+        self.debug_enabled = bool(debug_enabled)
 
     def _local_date(self, timestamp: int) -> str:
         return datetime.fromtimestamp(timestamp, timezone.utc).astimezone(self.zone).date().isoformat()
@@ -49,6 +71,25 @@ class UsageService:
             return None
         return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
+    @staticmethod
+    def _mask_identifier(value: Any) -> Any:
+        if not isinstance(value, str) or not value:
+            return value
+        return value[:4] + "…" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
+
+    @classmethod
+    def _mask_debug_ids(cls, value: Any) -> Any:
+        if isinstance(value, list):
+            return [cls._mask_debug_ids(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                key: cls._mask_identifier(item)
+                if key in {"thread_id", "turn_id"}
+                else cls._mask_debug_ids(item)
+                for key, item in value.items()
+            }
+        return value
+
     async def record_turn_usage(
         self,
         *,
@@ -60,6 +101,8 @@ class UsageService:
         usage: TokenUsage | dict[str, Any] | None,
         timestamp: int | None = None,
     ) -> bool:
+        """Compatibility path for already-delta usage supplied by callers/tests."""
+
         await self.initialize()
         now = int(timestamp if timestamp is not None else time.time())
         if isinstance(usage, dict):
@@ -78,8 +121,57 @@ class UsageService:
             output_tokens=values.get("output_tokens"),
             reasoning_tokens=values.get("reasoning_tokens"),
             total_tokens=values.get("total_tokens"),
+            cache_write_input_tokens=values.get("cache_write_input_tokens"),
+            source="compatibility_delta",
         )
         return await self.storage.insert(record)
+
+    async def observe_snapshot(self, snapshot: UsageSnapshot) -> dict[str, Any]:
+        """Persist a resume/replay baseline without creating usage."""
+
+        await self.initialize()
+        return await self.storage.observe_snapshot(snapshot)
+
+    async def record_turn_snapshot(
+        self,
+        *,
+        conversation_id: str | None,
+        thread_id: str | None,
+        turn_id: str | None,
+        model: str | None,
+        reasoning_effort: str | None,
+        snapshot: UsageSnapshot,
+        timestamp: int | None = None,
+    ) -> dict[str, Any]:
+        """Convert a thread cumulative snapshot into one persisted turn delta."""
+
+        await self.initialize()
+        now = int(timestamp if timestamp is not None else time.time())
+        record = UsageRecord(
+            timestamp=now,
+            local_date=self._local_date(now),
+            conversation_hash=self._hash_conversation(conversation_id),
+            thread_id=thread_id,
+            turn_id=turn_id,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            input_tokens=None,
+            cached_input_tokens=None,
+            output_tokens=None,
+            reasoning_tokens=None,
+            total_tokens=None,
+            cache_write_input_tokens=None,
+            context_total_tokens=snapshot.last.total_tokens if snapshot.last else None,
+            model_context_window=snapshot.model_context_window,
+            source=snapshot.source,
+        )
+        # The storage transaction derives the field-by-field delta and fills
+        # the record values before insertion. This keeps snapshot update and
+        # turn deduplication atomic.
+        diagnostic = await self.storage.record_snapshot(record, snapshot)
+        if self.debug_enabled:
+            diagnostic["log_safe"] = True
+        return diagnostic
 
     def _window(self, days: int) -> tuple[str, str]:
         safe_days = max(1, min(3660, int(days)))
@@ -137,16 +229,28 @@ class UsageService:
         start, end = self._window(days)
         return aggregate_by(await self.storage.rows(start, end), "reasoning_effort")
 
+    async def recent_turns(self, limit: int = 20) -> list[dict[str, Any]]:
+        await self.initialize()
+        return self._mask_debug_ids(await self.storage.recent_turns(limit))
+
     async def debug(self) -> dict[str, Any]:
         await self.initialize()
-        result = await self.storage.debug()
+        result = self._mask_debug_ids(await self.storage.debug())
         result["database"] = str(self.storage.path)
         result["timezone"] = self.timezone_name
         result["retentionDays"] = self.retention_days
+        result["accounting"] = {
+            "source": "thread/tokenUsage/updated",
+            "semantic": "total=thread_cumulative, last=context_snapshot",
+            "persisted": "field_by_field_delta(total)",
+            "cachedInput": "breakdown_of_input_not_added_to_total",
+            "reasoning": "breakdown_of_output_not_added_to_total",
+        }
         return result
 
-    async def close(self) -> None:
-        # Connections are per-operation, so there is no event-loop-bound handle
-        # to close.  Keep this method for a clean lifecycle and future batching.
-        return None
+    async def reset(self) -> dict[str, int]:
+        await self.initialize()
+        return await self.storage.reset()
 
+    async def close(self) -> None:
+        return None
