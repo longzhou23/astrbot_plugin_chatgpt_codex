@@ -31,6 +31,8 @@
         <div class="setting"><label for="setting_login_mode">登录方式</label><select id="setting_login_mode" data-setting="login_mode"><option value="browser">浏览器 OAuth（推荐）</option><option value="device_code">Device Code（无图形服务器）</option></select><small>仅影响下一次启动登录流程。</small></div>
         <div class="setting"><label for="setting_default_model">默认模型</label><input id="setting_default_model" data-setting="default_model" type="text" autocomplete="off"><small>填写服务端 model/list 返回的模型 ID；auto 使用服务端默认模型。</small></div>
         <div class="setting"><label for="setting_reasoning_effort">推理强度</label><input id="setting_reasoning_effort" data-setting="reasoning_effort" type="text" autocomplete="off"><small>例如 auto、low、medium；以当前模型实际支持项为准。</small></div>
+        <div class="setting"><label for="setting_harness_mode">Agent 外壳</label><select id="setting_harness_mode" data-setting="harness_mode"><option value="lightweight">轻量聊天（推荐）</option><option value="codex">Codex 原生 coding-agent</option></select><small>轻量模式替换默认 coding-agent 指令，减少普通聊天的固定上下文。</small></div>
+        <div class="setting"><label for="setting_tool_router">AstrBot 工具路由</label><select id="setting_tool_router" data-setting="tool_router"><option value="minimal">按需（推荐）</option><option value="none">不提供工具</option><option value="all">全部已注册工具</option></select><small>当前 MVP 没有注册本地工具；此项为后续 ToolBridge 预留。</small></div>
         <div class="setting"><label for="setting_max_concurrent_turns">最大并发 turn</label><input id="setting_max_concurrent_turns" data-setting="max_concurrent_turns" type="number" min="1" max="32" step="1"><small>所有会话同时运行的 Codex turn 数量。</small></div>
         <div class="setting"><label for="setting_turn_timeout">单 turn 超时（秒）</label><input id="setting_turn_timeout" data-setting="turn_timeout" type="number" min="30" max="3600" step="1"><small>配额错误不会因为此项被无限重试。</small></div>
         <div class="setting"><label for="setting_max_thread_turns">单 thread 最大 turn</label><input id="setting_max_thread_turns" data-setting="max_thread_turns" type="number" min="0" max="10000" step="1"><small>0 表示关闭按 turn 轮换。</small></div>
@@ -71,4 +73,3 @@
 </script>
 </body>
 </html>
-

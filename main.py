@@ -33,6 +33,8 @@ CONFIG_DEFAULTS: dict[str, Any] = {
     "login_mode": "browser",
     "default_model": "auto",
     "reasoning_effort": "auto",
+    "harness_mode": "lightweight",
+    "tool_router": "minimal",
     "streaming": True,
     "show_tool_status": False,
     "max_concurrent_turns": 2,
@@ -330,6 +332,8 @@ class ChatgptCodexPlugin(Star):
             "codex_path",
             "default_model",
             "reasoning_effort",
+            "harness_mode",
+            "tool_router",
             "usage_timezone",
         }
         bool_fields = {
@@ -345,6 +349,14 @@ class ChatgptCodexPlugin(Star):
             if key == "login_mode":
                 if value not in {"browser", "device_code"}:
                     raise ValueError("登录方式只能是 browser 或 device_code。")
+                values[key] = value
+            elif key == "harness_mode":
+                if value not in {"lightweight", "codex"}:
+                    raise ValueError("harness_mode 只能是 lightweight 或 codex。")
+                values[key] = value
+            elif key == "tool_router":
+                if value not in {"none", "minimal", "all"}:
+                    raise ValueError("tool_router 只能是 none、minimal 或 all。")
                 values[key] = value
             elif key in string_fields:
                 if not isinstance(value, str) or len(value.strip()) > 512:
@@ -379,6 +391,10 @@ class ChatgptCodexPlugin(Star):
                             self.service.set_model(str(values["default_model"]))
                         if "reasoning_effort" in values:
                             self.service.set_effort(str(values["reasoning_effort"]))
+                        if "harness_mode" in values:
+                            self.service.set_harness_mode(str(values["harness_mode"]))
+                        if "tool_router" in values:
+                            self.service.set_tool_router_mode(str(values["tool_router"]))
                         self.service.manager.codex_path = str(
                             self.config.get("codex_path", "codex")
                         )
@@ -517,6 +533,30 @@ class ChatgptCodexPlugin(Star):
             yield event.plain_result(f"已设置 reasoning effort：{level}")
         except Exception as exc:
             yield event.plain_result(f"effort 设置失败：{safe_error(exc)}")
+
+    @gpt.command("harness")
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    async def gpt_harness(self, event: AstrMessageEvent, mode: str):
+        if mode not in {"lightweight", "codex"}:
+            yield event.plain_result("harness 只能是 lightweight 或 codex。")
+            return
+        self.service.set_harness_mode(mode)
+        yield event.plain_result(
+            f"已切换 Harness：{mode}。当前会话将在下一轮按新配置创建或恢复 thread。"
+        )
+
+    @gpt.command("prompt-debug")
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    async def gpt_prompt_debug(self, event: AstrMessageEvent):
+        """Show redacted prompt composition diagnostics, never raw prompt text."""
+
+        try:
+            yield event.plain_result(
+                "Codex Prompt 诊断（仅长度/指纹，不含原文）\n"
+                + self._fmt(await self.service.prompt_debug())
+            )
+        except Exception as exc:
+            yield event.plain_result(f"Prompt 诊断读取失败：{safe_error(exc)}")
 
     @gpt.command("quota")
     async def gpt_quota(self, event: AstrMessageEvent):

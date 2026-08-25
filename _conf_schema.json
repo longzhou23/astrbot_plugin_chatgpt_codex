@@ -20,6 +20,18 @@
     "description": "使用服务端 model/list 声明的推理强度；auto 表示交由服务端选择。",
     "default": "auto"
   },
+  "harness_mode": {
+    "type": "string",
+    "options": ["lightweight", "codex"],
+    "description": "Codex Agent 外壳：lightweight 只保留聊天所需指令，codex 保留原生 coding-agent 指令。",
+    "default": "lightweight"
+  },
+  "tool_router": {
+    "type": "string",
+    "options": ["none", "minimal", "all"],
+    "description": "AstrBot 工具路由：闲聊默认 minimal，当前 MVP 没有注册本地工具。",
+    "default": "minimal"
+  },
   "streaming": {
     "type": "bool",
     "description": "在 AstrBot 支持时使用流式 Provider 调用。",

@@ -22,6 +22,12 @@ from .codex_errors import (
 )
 from .codex_rpc import JsonlRpcClient
 from .codex_security import safe_error
+from .harness import (
+    base_instructions_for,
+    lightweight_config,
+    normalize_harness_mode,
+    normalize_tool_router,
+)
 from .model_catalog import CodexModel, ModelCatalog, parse_models
 from .process_manager import CodexProcessManager
 from .session_store import SessionStore
@@ -129,6 +135,26 @@ class CodexService:
         self._effort = effort or "auto"
         self._persist_runtime_settings()
 
+    @property
+    def harness_mode(self) -> str:
+        return normalize_harness_mode(self.config.get("harness_mode", "lightweight"))
+
+    @property
+    def tool_router_mode(self) -> str:
+        return normalize_tool_router(self.config.get("tool_router", "minimal"))
+
+    def set_harness_mode(self, mode: str) -> None:
+        self.config["harness_mode"] = normalize_harness_mode(mode)
+
+    def set_tool_router_mode(self, mode: str) -> None:
+        self.config["tool_router"] = normalize_tool_router(mode)
+
+    def _base_instructions(self) -> str | None:
+        return base_instructions_for(self.harness_mode)
+
+    def _thread_config(self) -> dict[str, Any] | None:
+        return lightweight_config() if self.harness_mode == "lightweight" else None
+
     async def _server_request(
         self, request_id: int, method: str, _params: dict[str, Any]
     ) -> dict[str, str]:
@@ -204,7 +230,7 @@ class CodexService:
                         "clientInfo": {
                             "name": "astrbot_plugin_chatgpt_codex",
                             "title": "AstrBot ChatGPT Codex Bridge",
-                            "version": "0.1.0",
+                            "version": "0.2.0",
                         },
                         "capabilities": {
                             "experimentalApi": False,
@@ -451,7 +477,11 @@ class CodexService:
 
     def _tool_schema_json(self) -> str:
         tools = []
-        if self.tool_bridge.enabled and self.config.get("enable_local_codex_tools", False):
+        if (
+            self.tool_router_mode != "none"
+            and self.tool_bridge.enabled
+            and self.config.get("enable_local_codex_tools", False)
+        ):
             tools = self.tool_bridge.dynamic_tools()
         return json.dumps(tools, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -459,8 +489,12 @@ class CodexService:
         """Hash only deterministic prompt inputs, never per-turn metadata."""
 
         payload = {
-            "template": "astrbot-codex-prompt-v1",
+            "template": "astrbot-codex-prompt-v2",
             "system_prompt": self._stable_system_prompt(system_prompt),
+            "harness_mode": self.harness_mode,
+            "base_instructions": self._base_instructions(),
+            "thread_config": self._thread_config(),
+            "tool_router": self.tool_router_mode,
             "tool_schema": self._tool_schema_json(),
             "local_tools": bool(self.config.get("enable_local_codex_tools", False)),
         }
@@ -478,6 +512,9 @@ class CodexService:
             "account": account,
             "model": self._default_model,
             "effort": self._effort,
+            "harness_mode": self.harness_mode,
+            "tool_router": self.tool_router_mode,
+            "codex_builtin_tools": "server-controlled; no disable field in current app-server schema",
             "cached_models": len(self.catalog.models),
             "browser_login_pending": self._browser_callback_port is not None,
             "active_threads": len(self._active_threads),
@@ -486,6 +523,28 @@ class CodexService:
             "last_turn": self._last_turn,
             "local_tools": bool(self.config.get("enable_local_codex_tools", False)),
             "last_error": self.manager.last_error,
+        }
+
+    async def prompt_debug(self) -> dict[str, Any]:
+        """Return redacted prompt composition diagnostics for administrators."""
+
+        last_turn = self._last_turn or {}
+        context = last_turn.get("context_diagnostics")
+        if not isinstance(context, dict):
+            context = None
+        base = self._base_instructions() or ""
+        base_fingerprint = hashlib.sha256(base.encode("utf-8")).hexdigest()[:16] if base else None
+        return {
+            "harness_mode": self.harness_mode,
+            "tool_router": self.tool_router_mode,
+            "base_instructions_chars": len(base),
+            "base_instructions_fingerprint": base_fingerprint,
+            "thread_config_keys": sorted((self._thread_config() or {}).keys()),
+            "dynamic_tool_schema_bytes": len(self._tool_schema_json().encode("utf-8")),
+            "codex_builtin_tools": "server-controlled; not exposed by current app-server schema",
+            "last_turn_prompt_version": last_turn.get("prompt_version"),
+            "last_turn_context": context,
+            "note": "仅为转发组成估算；exact_token_count=false 时不等于服务端 tokenizer 计数。",
         }
 
     @staticmethod
@@ -571,6 +630,12 @@ class CodexService:
                         "approvalPolicy": "on-request",
                         "sandbox": "read-only",
                     }
+                    base_instructions = self._base_instructions()
+                    thread_config = self._thread_config()
+                    if base_instructions is not None:
+                        resume_params["baseInstructions"] = base_instructions
+                    if thread_config is not None:
+                        resume_params["config"] = thread_config
                     if developer_instructions:
                         resume_params["developerInstructions"] = developer_instructions
                     await self._request("thread/resume", resume_params, timeout=45)
@@ -590,11 +655,21 @@ class CodexService:
             "approvalPolicy": "on-request",
             "sandbox": "read-only",
         }
+        base_instructions = self._base_instructions()
+        thread_config = self._thread_config()
+        if base_instructions is not None:
+            params["baseInstructions"] = base_instructions
+        if thread_config is not None:
+            params["config"] = thread_config
         if developer_instructions:
             params["developerInstructions"] = developer_instructions
         if model != "auto":
             params["model"] = model
-        if self.tool_bridge.enabled and self.config.get("enable_local_codex_tools", False):
+        if (
+            self.tool_router_mode != "none"
+            and self.tool_bridge.enabled
+            and self.config.get("enable_local_codex_tools", False)
+        ):
             params["dynamicTools"] = self.tool_bridge.dynamic_tools()
         result = await self._request("thread/start", params, timeout=45)
         thread = result.get("thread") if isinstance(result, dict) else None
@@ -709,13 +784,20 @@ class CodexService:
             tool_schema = self._tool_schema_json()
             context_diagnostics = {
                 "kind": "estimated_context_composition",
+                "harness_mode": self.harness_mode,
+                "harness_chars": len(self._base_instructions() or ""),
                 "system_persona_chars": len(developer_instructions),
                 "conversation_history_chars": len(context_text) if not is_bootstrapped else 0,
                 "dynamic_context_chars": len(extra_text),
                 "latest_user_chars": len(user_text),
                 "tool_schema_json_bytes": len(tool_schema.encode("utf-8")),
+                "tool_router": self.tool_router_mode,
                 "tools_enabled": len(self.tool_bridge.dynamic_tools())
-                if self.tool_bridge.enabled and self.config.get("enable_local_codex_tools", False)
+                if (
+                    self.tool_router_mode != "none"
+                    and self.tool_bridge.enabled
+                    and self.config.get("enable_local_codex_tools", False)
+                )
                 else 0,
                 "exact_token_count": False,
                 "history_forwarded_to_codex": not is_bootstrapped,
@@ -895,6 +977,7 @@ class CodexService:
                     "usage": snapshot.as_dict() if snapshot else None,
                     "usage_diagnostic": usage_diagnostic,
                     "context_diagnostics": context_diagnostics,
+                    "prompt_version": prompt_version,
                 }
                 yield {"kind": "final", "text": final_text}
             finally:

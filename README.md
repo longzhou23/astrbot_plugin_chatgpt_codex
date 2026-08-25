@@ -27,6 +27,35 @@ CodexService -> CodexProcessManager -> codex app-server --stdio
 
 Codex owns its own thread/turn Agent Loop. AstrBot's normal tool loop is not run again for this Provider, and AstrBot tools are not passed to Codex in the MVP. `tool_bridge.py` is the reserved boundary for a future `dynamicTools` bridge; it is disabled by default to avoid a double Agent Loop and capability escalation.
 
+## Lightweight Chat Harness
+
+The default `harness_mode` is `lightweight`. With the installed Codex 0.146.0
+App Server protocol, `thread/start` and `thread/resume` accept a real
+`baseInstructions` replacement field. The plugin uses that field instead of
+appending a second prompt, and supplies a short chat-only harness under 100
+English words. AstrBot's persona remains a separate `developerInstructions`
+value, so changing the persona changes the thread prompt version and rolls the
+thread instead of leaving an old persona in place.
+
+Lightweight threads also disable the current optional prompt sources through a
+thread-scoped Codex config override: permissions/apps/collaboration/skill and
+environment blocks, project docs, memories, MCP servers, Codex apps, the plan
+tool, and request-user-input. No AstrBot dynamic tools are sent in the default
+`minimal` route. The current App Server schema does not expose a general
+"disable every built-in core tool" field; the plugin therefore does not claim
+to remove server-owned shell/environment schemas when the server chooses to
+register them. It keeps the read-only, no-network sandbox and declines
+unexpected approval requests. `harness_mode=codex` leaves the server's native
+base instructions/configuration in place for coding-agent use.
+
+The repeatable `scripts/benchmark_prompt_overhead.py` sends only `hi` on
+ephemeral threads and reads the real `thread/tokenUsage/updated` totals. It
+reports client-declared dynamic-tool bytes separately because the App Server
+does not provide a built-in tool-schema listing RPC. Use `--only C` or
+`--only D` to isolate the optimized variants, and keep the benchmark on an
+isolated Codex App Server process rather than treating local historical Usage
+records as A/B data.
+
 ## Files
 
 - `main.py`: AstrBot Star, lifecycle, and `/gpt` command group.
@@ -37,6 +66,8 @@ Codex owns its own thread/turn Agent Loop. AstrBot's normal tool loop is not run
 - `session_store.py`: SQLite mapping from AstrBot unified session to Codex thread.
 - `model_catalog.py`: server response parsing and non-secret model cache.
 - `tool_bridge.py`: disabled extension point for future AstrBot tool schemas.
+- `harness.py`: lightweight base-instruction and thread capability policy.
+- `scripts/benchmark_prompt_overhead.py`: real App Server A/B overhead benchmark.
 - `codex_security.py` / `codex_errors.py`: redaction and error classification.
 
 ## Cache and session behavior
@@ -45,7 +76,13 @@ The provider uses AstrBot's supplied unified `session_id` as the conversation ke
 
 Within one app-server process, a mapped thread is used directly for later turns. `thread/resume` is sent only when a persisted mapping is first used after process/reconnect, not on every message. A mapping is rolled over when its deterministic prompt version changes, it is idle for the configured TTL, reaches the configured maximum age, reaches `max_thread_turns`, or Codex reports that resume is not possible. Defaults are 7 days idle, 30 days maximum age, and 100 completed turns; all are configurable.
 
-The stable prompt version hashes the normalized developer/system instructions, canonical tool schema, and static local-tools setting. Current user text, attachments, message ids, request ids, timestamps, latency, and retry state are not put into that hash or developer prompt. The first turn after a reset may include the required historical context bootstrap; later turns send only the new user turn because Codex owns the resumed thread history.
+The stable prompt version hashes the normalized developer/system instructions,
+selected harness, thread-scoped Codex config, canonical tool schema, and static
+local-tools setting. Current user text, attachments, message ids, request ids,
+timestamps, latency, and retry state are not put into that hash or developer
+prompt. The first turn after a reset may include the required historical
+context bootstrap; later turns send only the new user turn because Codex owns
+the resumed thread history.
 
 Codex 0.146.0's generated app-server schema exposes `thread/tokenUsage/updated` with `threadId`, `turnId`, and `tokenUsage.last` / `tokenUsage.total` breakdowns. The plugin records only numeric usage fields, latest turn latency, reuse flag, and retry count for diagnostics; it never records the full prompt. `last_usage` and `last_turn` in `/gpt status` are unavailable until the current runtime emits the notification. `cachedInputTokens` is stored as an input breakdown and is never added again to the server-provided `totalTokens`.
 
@@ -57,7 +94,7 @@ Codex 0.146.0's generated app-server schema exposes `thread/tokenUsage/updated` 
 4. Open the installed plugin's `account` page in AstrBot WebUI. Choose browser OAuth or device code, then click `使用 ChatGPT 登录`. For browser OAuth, open the one-time authorization URL. If it does not complete automatically after the browser lands on a `http://localhost:.../auth/callback?...` address (common when the browser is not on the AstrBot host), copy that **entire callback address** from the browser address bar into the page's `提交 localhost 回调` field. The authenticated plugin page forwards it once to the local Codex App Server listener on the AstrBot host. The callback is immediately cleared, is not persisted or logged, and is only accepted for the exact listener port generated by the active login. Polling stops after the account is reported as logged in.
 5. Use that same page for status, logout, model refresh, and quota. The `/gpt ...` commands remain administrator-only fallbacks for headless or remote deployments.
 
-The authenticated `account` page is the profile-style overview: account identity, plan, current quota window, reset countdown, quota-activity visualization, server models, and safe runtime status. Because AstrBot embeds plugin pages in a sandboxed iframe, the account page also contains a real local `设置` tab; it reads the current plugin configuration on entry and saves validated settings through the plugin Web API. The standalone `settings` route remains available for direct opening and contains the same Chinese settings form. The form covers the Codex executable, login mode, server-selected model and reasoning effort, concurrency/timeouts, thread rollover, streaming, safe status labels, HTTPS transport, and the local-tools security switch. Codex executable, HTTPS transport, and maximum concurrency changes are marked as requiring an AstrBot restart; local Codex tools remain disabled by default.
+The authenticated `account` page is the profile-style overview: account identity, plan, current quota window, reset countdown, quota-activity visualization, server models, and safe runtime status. Because AstrBot embeds plugin pages in a sandboxed iframe, the account page also contains a real local `设置` tab; it reads the current plugin configuration on entry and saves validated settings through the plugin Web API. The standalone `settings` route remains available for direct opening and contains the same Chinese settings form. The form covers the Codex executable, login mode, server-selected model and reasoning effort, harness mode, tool router, concurrency/timeouts, thread rollover, streaming, safe status labels, HTTPS transport, and the local-tools security switch. Codex executable, HTTPS transport, and maximum concurrency changes are marked as requiring an AstrBot restart; lightweight harness and router changes apply to the next thread.
 
 The quota activity grid is intentionally an aggregate current-window visualization, not fabricated historical daily Token data: the Codex App Server rate-limit API currently exposes rolling windows rather than a contribution-history feed. The account profile accepts a future public HTTPS avatar field when the server provides one, but the current official `account/read` schema only defines account type, email, and plan, so the UI safely falls back to an initial avatar instead of querying ChatGPT web/private endpoints.
 
@@ -74,6 +111,12 @@ WebUI is the primary management surface: AstrBot Dashboard → Plugins → `Chat
 `/gpt models` refreshes and prints the current `model/list` catalog, including each model's advertised reasoning efforts.
 
 `/gpt model <id>` and `/gpt effort <level>` are administrator-only. `auto` leaves the server's default selection in place.
+
+`/gpt harness lightweight|codex` switches the thread-level base-instruction
+policy for new or rotated threads. `/gpt prompt-debug` is administrator-only
+and returns only lengths, fingerprints, mode, and the last redacted context
+diagnostics; it never prints raw persona text, history, credentials, or hidden
+reasoning.
 
 `/gpt quota` calls `account/rateLimits/read`. Quota/usage errors are surfaced as a terminal error; the plugin does not retry them indefinitely.
 
@@ -98,7 +141,7 @@ Settings include `usage_timezone` (default `Asia/Shanghai`), `usage_retention_da
 
 ## Security defaults
 
-The default configuration has `enable_local_codex_tools=false`. The plugin starts threads with a read-only sandbox, no sandbox network access, and an approval policy that causes unexpected approval requests to be declined. It does not pass AstrBot's local shell, filesystem-write, MCP, computer-control, browser-control, or function tools to Codex. Raw reasoning events, raw command text, file diffs, MCP payloads, and internal state are not rendered or written to logs.
+The default configuration has `harness_mode=lightweight`, `tool_router=minimal`, and `enable_local_codex_tools=false`. The plugin starts threads with a read-only sandbox, no sandbox network access, and an approval policy that causes unexpected approval requests to be declined. It does not pass AstrBot's local shell, filesystem-write, MCP, computer-control, browser-control, or function tools to Codex. Optional Codex prompt sources and MCP/apps are disabled by the lightweight thread config. Built-in core tool registration remains controlled by the installed App Server because its current protocol has no global tool-disable parameter; the plugin reports this limitation instead of pretending that a prompt instruction removed those schemas. Raw reasoning events, raw command text, file diffs, MCP payloads, and internal state are not rendered or written to logs.
 
 Only public assistant-message deltas and, when explicitly enabled, generic status labels such as `[fileChange started]` are exposed. A status label never includes a command, path, tool argument, result, or hidden reasoning.
 
