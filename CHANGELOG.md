@@ -17,6 +17,8 @@ historical development milestones, not separately published public tags.
 - 更新 WebUI 后端选项顺序、默认提示和中英文文档，使推荐路径保持一致。
 - 改善缺少 Codex CLI 时的启动错误提示，明确 Transport 推理与首次 OAuth 登录的
   依赖边界。
+- 在中英文 README 顶部增加新实例首次启动指引，说明 Codex CLI、OAuth 回调、
+  `CODEX_HOME` 和 Transport 推理的依赖边界。
 - 增加中英文双语版本记录。
 - 增加 `README.zh-CN.md`，覆盖安装、配置、登录、Usage、安全、故障排查和
   Beta 限制。
@@ -32,6 +34,8 @@ historical development milestones, not separately published public tags.
   so the recommendation is consistent across the plugin.
 - Improved the missing-Codex-CLI error to explain the dependency boundary between
   Transport inference and the first official OAuth login.
+- Added a prominent first-start guide to both READMEs covering Codex CLI, OAuth
+  callback handling, `CODEX_HOME`, and the Transport inference boundary.
 - Added bilingual release notes.
 - Added `README.zh-CN.md` covering installation, configuration, login, Usage,
   security, troubleshooting, and Beta limitations.

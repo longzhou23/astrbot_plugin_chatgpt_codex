@@ -17,6 +17,32 @@ The beta is intended for a fresh AstrBot test installation. Back up the
 plugin data directory before upgrading an existing installation, especially
 when switching backend modes or changing the Codex executable.
 
+## First-start guide for a new instance
+
+The first login has one extra prerequisite that is easy to miss:
+
+1. Install a current Codex CLI on the AstrBot host, or set `codex_path` to its
+   absolute executable path. The plugin uses the official Codex App Server
+   OAuth / Device Code RPC for the first ChatGPT login.
+2. Restart AstrBot and open the plugin's WebUI overview. Click the ChatGPT
+   login button and finish the browser OAuth or Device Code flow.
+3. If browser OAuth ends at a `localhost` callback URL, paste the complete URL
+   back into the plugin page. Do not paste only the code and do not share the
+   URL in logs or issue reports.
+4. After the page reports that the account is logged in, the credentials are
+   persisted in the plugin-owned `CODEX_HOME`. The recommended `transport`
+   backend can then read the login state and perform Responses inference
+   without starting `codex app-server` for each request.
+
+If a new instance shows `No such file or directory: 'codex'` or
+`Unable to start Codex app-server`, Codex CLI is missing or `codex_path` is
+wrong. Fix that prerequisite first. Selecting `app_server` also requires the
+Codex executable for inference; selecting `transport` removes the App Server
+runtime requirement only after the initial official login has completed.
+
+The plugin never asks users to copy ChatGPT cookies, access tokens, refresh
+tokens, or passwords. Do not manually edit or share `CODEX_HOME/auth.json`.
+
 ## Important authorization boundary
 
 ChatGPT Plus and the OpenAI API are separate products with separate authorization and billing. This plugin does not claim that a Plus subscription is an OpenAI API quota or API key. It asks the locally installed Codex App Server to perform its supported ChatGPT login flow, then uses only the account's actual Codex model catalog and rate limits.

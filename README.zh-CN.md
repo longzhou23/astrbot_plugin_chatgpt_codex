@@ -9,6 +9,30 @@ Responses HTTP/SSE Transport 后端；稳定的 `codex app-server` 作为兼容�
 插件不使用 ChatGPT 网页 Cookie、浏览器抓包、私有 BFF 接口，也不伪造
 OpenAI API。当前版本为第一个公开 Beta：`v0.3.0-beta.1`。
 
+## 首次启动指引（新实例必读）
+
+首次登录有一个容易忽略的前置条件：
+
+1. 在运行 AstrBot 的主机上安装当前 Codex CLI，或者在插件设置的
+   `codex_path` 中填写 Codex 可执行文件的绝对路径。首次 ChatGPT 登录使用
+   官方 Codex App Server 提供的 OAuth / Device Code RPC。
+2. 重启 AstrBot，打开插件 WebUI 的概览页面，点击 ChatGPT 登录并完成浏览器
+   OAuth 或 Device Code 授权。
+3. 如果浏览器最后跳转到 `localhost` 回调地址，将完整地址粘贴回插件页面；不要
+   只粘贴 code，也不要把回调地址发到日志或 Issue 中。
+4. 页面显示账号已登录后，登录态会持久化到插件独立的 `CODEX_HOME`。此后推荐的
+   `transport` 后端可以读取登录态并直接进行 Responses 推理，不会每次请求都启动
+   `codex app-server`。
+
+如果新实例显示 `No such file or directory: 'codex'` 或
+`Unable to start Codex app-server`，说明 Codex CLI 尚未安装，或者 `codex_path`
+填写错误，请先修复这个前置条件。选择 `app_server` 时推理本身也需要 Codex
+可执行文件；选择 `transport` 只有在首次官方登录完成后，才可以不启动 App Server
+进行推理。
+
+插件不会要求用户复制 ChatGPT Cookie、access token、refresh token 或密码。不要
+手动编辑或分享 `CODEX_HOME/auth.json`。
+
 ## 重要说明：Plus 不等于 OpenAI API
 
 ChatGPT Plus 和 OpenAI API 是两套独立的产品、授权和计费体系：
