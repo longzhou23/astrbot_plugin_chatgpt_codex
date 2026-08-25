@@ -43,12 +43,44 @@ Windows 的 `C:\\Users\\<user>\\AppData\\Roaming\\npm\\codex.cmd`，或
 Linux/macOS 的 `/usr/local/bin/codex`。首次 ChatGPT 登录使用官方 Codex App
 Server 提供的 OAuth / Device Code RPC。
 
+插件第一次打开概览页时会显示欢迎配置页。它会先自动检查 `codex` 是否在当前
+AstrBot 运行环境的 PATH 中；如果检测成功，保持 `codex` 即可。只有检测失败时
+才需要填写绝对路径。欢迎页也可以直接选择浏览器 OAuth 或 Device Code，并保存
+配置后开始登录。
+
+#### Docker 用户特别说明
+
+AstrBot 在 Docker 容器内启动 Codex，插件只能看到容器内的文件和 PATH，不能直接
+使用宿主机的 `/usr/bin/codex`、`/usr/lib/node_modules` 或 Windows 路径。请进入
+实际运行 AstrBot 的容器检查：
+
+```bash
+docker compose exec astrbot sh
+command -v codex
+codex --version
+```
+
+如果 Codex 安装在容器内但不在 PATH 中，把 `command -v codex` 得到的容器内绝对
+路径填入欢迎页或设置页。若需要通过 npm 安装，请把安装步骤写入自己的 Dockerfile
+并重新构建镜像，不要只在正在运行的容器里临时安装：
+
+```dockerfile
+RUN npm install -g --include=optional @openai/codex@0.149.1
+```
+
+`CODEX_HOME` 会由插件保存到 AstrBot 的持久化数据目录；请确保 Docker Compose
+挂载了 `/AstrBot/data`。首次登录仍需在插件欢迎页完成一次 ChatGPT OAuth，之后
+不需要每次启动都重新登录。不要把宿主机 Codex 路径直接复制到容器配置中。
+
 ### 2. 完成首次登录
 
 1. 重启 AstrBot，打开插件 WebUI 的概览页面，点击 ChatGPT 登录并完成浏览器
-   OAuth 或 Device Code 授权。
-2. 如果浏览器最后跳转到 `localhost` 回调地址，将完整地址粘贴回插件页面；不要
-   只粘贴 code，也不要把回调地址发到日志或 Issue 中。
+   OAuth 或 Device Code 授权。登录方式会使用欢迎页/设置页中当前保存的选择；
+   Device Code 会直接显示验证地址和一次性验证码。
+2. 如果浏览器最后跳转到 `localhost` 回调地址，将地址栏中的完整 URL 粘贴回插件
+   页面，必须包含完整的 `?code=...&state=...` 参数；不要只粘贴路径或 code，也
+   不要把回调地址发到日志或 Issue 中。远程服务器上浏览器所在电脑的 localhost
+   不是服务器本机，因此需要手动提交完整回调。
 3. 页面显示账号已登录后，登录态会持久化到插件独立的 `CODEX_HOME`。此后推荐的
    `transport` 后端可以读取登录态并直接进行 Responses 推理，不会每次请求都启动
    `codex app-server`。

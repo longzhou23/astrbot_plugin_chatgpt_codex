@@ -52,13 +52,50 @@ settings to the absolute executable path, for example
 `/usr/local/bin/codex` on Linux/macOS. The plugin uses the official Codex App
 Server OAuth / Device Code RPC for the first ChatGPT login.
 
+On the first visit to the overview page, the plugin shows a welcome setup panel.
+It probes `codex` in the PATH of the environment where AstrBot is actually running.
+If the probe succeeds, leave the value as `codex`; only enter an absolute path when
+the probe fails. The same panel lets you choose browser OAuth or Device Code and
+starts the first login after saving the settings.
+
+#### Docker users
+
+When AstrBot runs in Docker, the plugin can see only the container filesystem and
+PATH. A host path such as `/usr/bin/codex`, `/usr/lib/node_modules`, or a Windows
+path is not visible inside the container. Check the container that actually runs
+AstrBot:
+
+```bash
+docker compose exec astrbot sh
+command -v codex
+codex --version
+```
+
+If Codex is installed in the container but is not on `PATH`, enter the absolute path
+reported by `command -v codex` in the welcome page or settings page. For a durable
+deployment, put the installation in your Dockerfile and rebuild the image instead of
+installing into a running container:
+
+```dockerfile
+RUN npm install -g --include=optional @openai/codex@0.149.1
+```
+
+The plugin stores `CODEX_HOME` below AstrBot's persistent data directory, so the
+Compose deployment must mount `/AstrBot/data`. Complete ChatGPT OAuth once in the
+plugin welcome page; later restarts reuse the persisted login state. Do not copy a
+host Codex path into the container configuration.
+
 ### 2. Complete the first login
 
 1. Restart AstrBot and open the plugin's WebUI overview. Click the ChatGPT
-   login button and finish the browser OAuth or Device Code flow.
+   login button and finish the browser OAuth or Device Code flow. The login
+   button uses the mode currently saved in the welcome/settings page; Device
+   Code displays its verification URL and one-time user code.
 2. If browser OAuth ends at a `localhost` callback URL, paste the complete URL
-   back into the plugin page. Do not paste only the code and do not share the
-   URL in logs or issue reports.
+   back into the plugin page, including the full `?code=...&state=...` query.
+   Do not paste only the path or code and do not share the URL in logs or issue
+   reports. On a remote server, the browser's localhost is the browser computer,
+   not the server, so the complete callback must be submitted manually.
 3. After the page reports that the account is logged in, the credentials are
    persisted in the plugin-owned `CODEX_HOME`. The recommended `transport`
    backend can then read the login state and perform Responses inference

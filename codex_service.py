@@ -33,7 +33,7 @@ from .process_manager import CodexProcessManager
 from .session_store import SessionStore
 from .tool_bridge import ToolBridge
 from .transport import CodexTransportClient
-from .transport.types import TransportError, TransportModelError
+from .transport.types import TransportAuthError, TransportError, TransportModelError
 from .usage.models import UsageSnapshot, parse_usage_snapshot_event
 from .usage.service import UsageService
 
@@ -128,6 +128,7 @@ class CodexService:
         self._default_model = str(config.get("default_model", "auto") or "auto")
         self._effort = str(config.get("reasoning_effort", "auto") or "auto")
         self._state_path = self.data_dir / "runtime_settings.json"
+        self._setup_completed = False
         self._load_runtime_settings()
 
     async def initialize(self) -> None:
@@ -150,16 +151,35 @@ class CodexService:
             if isinstance(state, dict):
                 self._default_model = str(state.get("model", self._default_model) or "auto")
                 self._effort = str(state.get("effort", self._effort) or "auto")
+                # Existing installations predating the onboarding flag have
+                # already completed the initial configuration flow.
+                self._setup_completed = bool(state.get("setupCompleted", True))
         except (OSError, ValueError, TypeError):
             return
 
     def _persist_runtime_settings(self) -> None:
         self._state_path.write_text(
             json.dumps(
-                {"model": self._default_model, "effort": self._effort}, ensure_ascii=False, indent=2
+                {
+                    "model": self._default_model,
+                    "effort": self._effort,
+                    "setupCompleted": self._setup_completed,
+                },
+                ensure_ascii=False,
+                indent=2,
             ),
             encoding="utf-8",
         )
+
+    @property
+    def setup_completed(self) -> bool:
+        return self._setup_completed
+
+    def mark_setup_completed(self) -> None:
+        if self._setup_completed:
+            return
+        self._setup_completed = True
+        self._persist_runtime_settings()
 
     @property
     def default_model(self) -> str:
@@ -332,6 +352,8 @@ class CodexService:
         if self.backend_mode == "transport":
             account = await self.transport.get_account()
             self._account = account or None
+            if account:
+                self.mark_setup_completed()
             return account
         result = await self._request("account/read", {"refreshToken": bool(refresh)})
         account = result.get("account") if isinstance(result, dict) else None
@@ -344,6 +366,7 @@ class CodexService:
             if avatar_url is not None:
                 safe_account["avatarUrl"] = avatar_url
             self._account = safe_account
+            self.mark_setup_completed()
             return safe_account
         self._account = None
         return {}
@@ -559,7 +582,14 @@ class CodexService:
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     async def status(self) -> dict[str, Any]:
-        account = await self.account_read(refresh=False)
+        auth_error: str | None = None
+        try:
+            account = await self.account_read(refresh=False)
+        except TransportAuthError as exc:
+            # First-run status must remain readable so the WebUI can render
+            # onboarding and configure Codex before an auth.json exists.
+            account = {}
+            auth_error = str(exc)
         stale_removed = await self.sessions.cleanup(
             idle_ttl=float(self.config.get("thread_idle_ttl", 604800)),
             max_age=float(self.config.get("thread_max_age", 2592000)),
@@ -569,6 +599,11 @@ class CodexService:
             "backend_mode": self.backend_mode,
             "agent_loop": "astrbot",
             "codex_agent_loop": self.backend_mode != "transport",
+            "setup_completed": self.setup_completed,
+            "auth_required": bool(auth_error),
+            "auth_error": auth_error,
+            "login_mode": str(self.config.get("login_mode", "browser") or "browser"),
+            "codex": self.manager.diagnostic(),
             "account": account,
             "model": self._default_model,
             "effort": self._effort,

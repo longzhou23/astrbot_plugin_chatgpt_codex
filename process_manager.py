@@ -5,6 +5,7 @@ import contextlib
 import logging
 import os
 import shlex
+import shutil
 import stat
 from pathlib import Path
 
@@ -49,6 +50,44 @@ class CodexProcessManager:
         if self._stop_requested:
             return "stopped"
         return "offline"
+
+    def diagnostic(self) -> dict[str, str | bool]:
+        """Return non-secret executable discovery information for the WebUI."""
+
+        configured = self.codex_path or "codex"
+        try:
+            command = shlex.split(configured, posix=os.name != "nt")
+        except ValueError as exc:
+            return {
+                "configured": configured,
+                "available": False,
+                "error": f"路径格式无效：{redact_text(str(exc))}",
+            }
+        if not command:
+            command = ["codex"]
+
+        executable = command[0]
+        resolved = shutil.which(executable)
+        if resolved is None and (os.path.isabs(executable) or os.path.dirname(executable)):
+            candidate = Path(executable).expanduser()
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                resolved = str(candidate)
+        available = resolved is not None
+        result: dict[str, str | bool] = {
+            "configured": configured,
+            "available": available,
+            "environment": "docker"
+            if Path("/.dockerenv").exists() or Path("/AstrBot/data").is_dir()
+            else "host",
+        }
+        if resolved:
+            result["resolved"] = resolved
+        if not available:
+            result["error"] = (
+                "未找到 Codex 可执行文件。普通安装请确保 codex 在 PATH 中；"
+                "Docker 请按 README 的容器内路径指引配置，不要填写宿主机路径。"
+            )
+        return result
 
     def _prepare_home(self) -> None:
         self.codex_home.mkdir(parents=True, exist_ok=True)
