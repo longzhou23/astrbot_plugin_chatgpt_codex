@@ -62,7 +62,7 @@ class AgentProviderContractTests(unittest.IsolatedAsyncioTestCase):
             frame
             async for frame in _stream_frames(event_stream([{"kind": "final", "text": "hello"}]))
         ]
-        self.assertEqual(frames, [("hello", True), ("hello", False)])
+        self.assertEqual(frames, [("hello", True), ("", False)])
 
     async def test_status_chunks_do_not_replace_terminal_answer(self):
         frames = [
@@ -76,7 +76,7 @@ class AgentProviderContractTests(unittest.IsolatedAsyncioTestCase):
                 )
             )
         ]
-        self.assertEqual(frames[-1], ("done", False))
+        self.assertEqual(frames[-1], ("", False))
 
 
 if __name__ == "__main__":

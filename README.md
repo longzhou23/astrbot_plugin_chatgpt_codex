@@ -1,6 +1,18 @@
 # AstrBot ChatGPT Codex Bridge
 
-`astrbot_plugin_chatgpt_codex` lets AstrBot use models made available to the signed-in ChatGPT account through the official `codex app-server` protocol. It does not use ChatGPT web cookies, private BFF endpoints, browser capture, or a fabricated OpenAI-compatible endpoint.
+`astrbot_plugin_chatgpt_codex` lets AstrBot use models made available to the signed-in ChatGPT account through the open-source Codex transport implementation. The default is the stable `codex app-server` backend; an explicitly selected experimental `transport` backend can send direct Responses HTTP/SSE requests without creating Codex threads or turns. It does not use ChatGPT web cookies, browser capture, or a fabricated OpenAI-compatible endpoint.
+
+## First beta release
+
+This repository is published as `v0.3.0-beta.1`, the first public beta of the
+current implementation. The recommended production-like path is still the
+default `app_server` backend. The direct `transport` backend is included for
+testing and comparison, and should be enabled deliberately because its
+ChatGPT Codex endpoint shape can change with future Codex client releases.
+
+The beta is intended for a fresh AstrBot test installation. Back up the
+plugin data directory before upgrading an existing installation, especially
+when switching backend modes or changing the Codex executable.
 
 ## Important authorization boundary
 
@@ -8,24 +20,27 @@ ChatGPT Plus and the OpenAI API are separate products with separate authorizatio
 
 The server's `model/list` response is authoritative. Model ids and reasoning efforts are not hard-coded, so names can change or be unavailable for a particular account.
 
-## MVP architecture
+## Backend architecture
 
-AstrBot's stable plugin surface exposes custom Providers, commands, and hooks. At the time of implementation it does not expose a stable Star-side registration contract for a third-party Agent Runner. The MVP therefore uses a deliberately thin `chatgpt_codex` Provider adapter, while the actual orchestration is `CodexService`:
+AstrBot's stable plugin surface exposes custom Providers, commands, and hooks. The plugin therefore uses a thin `chatgpt_codex` Provider adapter; AstrBot remains the outer Agent Runner and owns persona, memory, history, RAG, MCP, permissions, and tool-loop decisions. `CodexService` selects the inference backend:
 
 ```text
-AstrBot message / Agent request
+AstrBot Agent Runner / message
         |
         v
 chatgpt_codex Provider (thin adapter)
         |
         v
-CodexService -> CodexProcessManager -> codex app-server --stdio
-        |                         |
-        |                         +-- account/login, model/list, quota
-        +-- AstrBot session -> Codex thread/resume -> turn/start
+CodexService -- backend_mode=app_server --> codex app-server --stdio
+        |                                      thread/start + turn/start
+        |
+        `-- backend_mode=transport -------> Codex Responses HTTP/SSE
+                                             no thread/turn/tool harness
 ```
 
-Codex owns its own thread/turn Agent Loop. AstrBot's normal tool loop is not run again for this Provider, and AstrBot tools are not passed to Codex in the MVP. `tool_bridge.py` is the reserved boundary for a future `dynamicTools` bridge; it is disabled by default to avoid a double Agent Loop and capability escalation.
+`backend_mode=app_server` is the default and preserves the previous behavior. `transport` uses the same `CODEX_HOME` login state, `.../codex/models`, and `.../codex/responses` shapes used by the open-source Codex client, but deliberately has no thread/turn, shell, filesystem, MCP, computer, browser, approval, or Codex built-in-tool methods. AstrBot `ToolSet` schemas are converted to Responses function tools and returned as structured tool calls to AstrBot; the plugin does not execute them. `auto` tries transport once and falls back to App Server on auth, model, protocol, network, or rate-limit failure. A fallback is one attempt only; quota exhaustion is never retried indefinitely.
+
+The direct transport is experimental because the ChatGPT Codex backend endpoint is implemented in the open-source Codex client rather than documented as a general public API contract. It may change with a future Codex release. If reliability is more important than the transport experiment, keep `app_server` selected.
 
 ## Lightweight Chat Harness
 
@@ -67,6 +82,7 @@ records as A/B data.
 - `model_catalog.py`: server response parsing and non-secret model cache.
 - `tool_bridge.py`: disabled extension point for future AstrBot tool schemas.
 - `harness.py`: lightweight base-instruction and thread capability policy.
+- `transport/`: direct Responses client, OAuth bridge, SSE parser, model/quota adapters, and transport types.
 - `scripts/benchmark_prompt_overhead.py`: real App Server A/B overhead benchmark.
 - `codex_security.py` / `codex_errors.py`: redaction and error classification.
 
@@ -88,13 +104,13 @@ Codex 0.146.0's generated app-server schema exposes `thread/tokenUsage/updated` 
 
 ## Install and configure
 
-1. Install a current Codex CLI binary on the AstrBot host and make sure `codex app-server --stdio` works for the AstrBot service account. Set `codex_path` to an absolute executable path when `codex` is not on `PATH`.
+1. Install a current Codex CLI binary on the AstrBot host. `app_server` needs `codex app-server --stdio`; `transport` still uses the same Codex OAuth `CODEX_HOME` but does not start the App Server for inference. Set `codex_path` to an absolute executable path when `codex` is not on `PATH`.
 2. Copy this directory into `<AstrBot root>/data/plugins/astrbot_plugin_chatgpt_codex` or install its zip through AstrBot's plugin manager.
 3. Restart or reload AstrBot. In the model-provider settings, enable the `ChatGPT Codex Subscription` provider and select it for the target conversation. No OpenAI API key is required by this plugin.
 4. Open the installed plugin's `account` page in AstrBot WebUI. Choose browser OAuth or device code, then click `使用 ChatGPT 登录`. For browser OAuth, open the one-time authorization URL. If it does not complete automatically after the browser lands on a `http://localhost:.../auth/callback?...` address (common when the browser is not on the AstrBot host), copy that **entire callback address** from the browser address bar into the page's `提交 localhost 回调` field. The authenticated plugin page forwards it once to the local Codex App Server listener on the AstrBot host. The callback is immediately cleared, is not persisted or logged, and is only accepted for the exact listener port generated by the active login. Polling stops after the account is reported as logged in.
 5. Use that same page for status, logout, model refresh, and quota. The `/gpt ...` commands remain administrator-only fallbacks for headless or remote deployments.
 
-The authenticated `account` page is the profile-style overview: account identity, plan, current quota window, reset countdown, quota-activity visualization, server models, and safe runtime status. Because AstrBot embeds plugin pages in a sandboxed iframe, the account page also contains a real local `设置` tab; it reads the current plugin configuration on entry and saves validated settings through the plugin Web API. The standalone `settings` route remains available for direct opening and contains the same Chinese settings form. The form covers the Codex executable, login mode, server-selected model and reasoning effort, harness mode, tool router, concurrency/timeouts, thread rollover, streaming, safe status labels, HTTPS transport, and the local-tools security switch. Codex executable, HTTPS transport, and maximum concurrency changes are marked as requiring an AstrBot restart; lightweight harness and router changes apply to the next thread.
+The authenticated `account` page is the profile-style overview: account identity, plan, current quota window, reset countdown, quota-activity visualization, server models, and safe runtime status. The separate `settings` tab includes the `backend_mode` selector (`app_server`, `transport`, `auto`) and an optional `transport_proxy` field alongside the Chinese settings form. It reads the current plugin configuration on entry and saves validated settings through the plugin Web API. Codex executable, HTTPS transport, and maximum concurrency changes are marked as requiring an AstrBot restart; backend selection and the explicit Transport proxy apply to the next request. AstrBot clears inherited system proxy variables at startup, so a host behind a local HTTP proxy should set `transport_proxy` explicitly (for example `http://127.0.0.1:7890`).
 
 The quota activity grid is intentionally an aggregate current-window visualization, not fabricated historical daily Token data: the Codex App Server rate-limit API currently exposes rolling windows rather than a contribution-history feed. The account profile accepts a future public HTTPS avatar field when the server provides one, but the current official `account/read` schema only defines account type, email, and plan, so the UI safely falls back to an initial avatar instead of querying ChatGPT web/private endpoints.
 
@@ -120,11 +136,15 @@ reasoning.
 
 `/gpt quota` calls `account/rateLimits/read`. Quota/usage errors are surfaced as a terminal error; the plugin does not retry them indefinitely.
 
+`/gpt benchmark transport` runs one explicit real `hello` request through direct transport and reports latency plus the server-returned usage. `/gpt benchmark app_server` does the same through the existing App Server path. These commands are administrator-only and are never run automatically.
+
 ## Usage Tracking
 
 The Usage tab and `/gpt usage` are a local aggregate, deliberately separate from `/gpt quota`:
 
 - Official account limits come from `account/rateLimits/read` and are shown as rate-limit windows and reset times.
+- In `transport` mode, direct responses expose only the rate-limit headers returned on the Responses stream; if the service returns none, the UI reports that no direct header snapshot is available rather than inventing an account window. App Server remains the authoritative quota source when `app_server` is selected.
+- Direct transport records `response.completed.usage` as a per-request usage record. It does not convert prompt length or context-window size into token estimates.
 - Local token usage is collected only after this plugin is installed and a completed Codex turn emits `thread/tokenUsage/updated`. The current protocol fields used are `tokenUsage.last.inputTokens`, `cachedInputTokens`, `outputTokens`, `reasoningOutputTokens`, and the authoritative `totalTokens`, together with the notification's `threadId` and `turnId`.
 - `tokenUsage.total` is a cumulative thread/session snapshot; each completed turn is persisted as a field-by-field delta from the previous snapshot. `tokenUsage.last` is the latest active-context snapshot and is used only for context diagnostics. A unique SQLite `turn_id` plus a durable `usage_snapshots` baseline prevents duplicate accounting after reconnects, resume replay, or process restarts.
 - Cached input is a subset of input, and reasoning output is a breakdown of output. Neither is added on top of the server-provided `totalTokens`. If one cumulative field moves backwards, that field is treated as a counter reset and the current value starts a new non-negative delta.
@@ -141,7 +161,7 @@ Settings include `usage_timezone` (default `Asia/Shanghai`), `usage_retention_da
 
 ## Security defaults
 
-The default configuration has `harness_mode=lightweight`, `tool_router=minimal`, and `enable_local_codex_tools=false`. The plugin starts threads with a read-only sandbox, no sandbox network access, and an approval policy that causes unexpected approval requests to be declined. It does not pass AstrBot's local shell, filesystem-write, MCP, computer-control, browser-control, or function tools to Codex. Optional Codex prompt sources and MCP/apps are disabled by the lightweight thread config. Built-in core tool registration remains controlled by the installed App Server because its current protocol has no global tool-disable parameter; the plugin reports this limitation instead of pretending that a prompt instruction removed those schemas. Raw reasoning events, raw command text, file diffs, MCP payloads, and internal state are not rendered or written to logs.
+The default configuration has `backend_mode=app_server`, `harness_mode=lightweight`, `tool_router=minimal`, and `enable_local_codex_tools=false`. App Server threads use a read-only sandbox, no sandbox network access, and declined unexpected approvals. Direct transport has no Codex local capability surface at all; only the AstrBot-selected function schemas are sent, and execution remains with AstrBot. Optional Codex prompt sources and MCP/apps are disabled by the lightweight thread config. Raw reasoning events, raw command text, file diffs, MCP payloads, and internal state are not rendered or written to logs.
 
 Only public assistant-message deltas and, when explicitly enabled, generic status labels such as `[fileChange started]` are exposed. A status label never includes a command, path, tool argument, result, or hidden reasoning.
 
@@ -159,9 +179,8 @@ The tests are protocol-level tests and do not require a Codex binary or a live C
 
 ## Known limitations and next steps
 
-- Streaming mode currently buffers Codex text until `item/completed`/`turn/completed` and then emits one authoritative final chunk. This intentionally avoids duplicate or contradictory text when the upstream response stream reconnects; safe progressive delta reconciliation is planned for a later release.
-- The AstrBot adapter follows that visible chunk with one non-chunk terminal `LLMResponse`. The terminal frame is required for AstrBot's Agent Runner to finish the step and is not rendered a second time.
+- App Server mode still buffers Codex text until `item/completed`/`turn/completed` and then emits one authoritative answer. Transport mode parses Responses SSE deltas and emits them progressively; its terminal `LLMResponse` is intentionally empty so the answer is not rendered twice.
 - AstrBot image/audio context is not yet converted to the App Server's inline/local input variants; text is the reliable MVP path.
-- The MVP does not bridge AstrBot tools into Codex `dynamicTools`; doing so needs explicit user-visible approval semantics, a tool-call request handler, and tests against the exact current experimental protocol.
+- Transport mode forwards AstrBot function schemas and returns tool calls to AstrBot's Agent Runner, but the current MVP does not execute a transport-side multi-call loop itself. App Server mode continues to keep the Codex loop isolated and does not receive AstrBot tools.
 - Codex executable availability, ChatGPT plan entitlements, regional access, quota behavior, and protocol details are external runtime dependencies. The model catalog and errors must be checked on the target machine.
-- Provider selection still uses AstrBot's Provider registry because that is the stable plugin integration point. It delegates Agent orchestration to Codex rather than emulating an OpenAI Chat API.
+- Provider selection still uses AstrBot's Provider registry because that is the stable plugin integration point. Transport mode bypasses Codex Agent Harness; App Server mode retains it for compatibility.

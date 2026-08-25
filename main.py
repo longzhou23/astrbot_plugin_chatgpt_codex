@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from .agent_provider import bind_service
 from .codex_errors import safe_error
@@ -30,6 +31,8 @@ def _data_dir() -> Path:
 
 CONFIG_DEFAULTS: dict[str, Any] = {
     "codex_path": "codex",
+    "backend_mode": "app_server",
+    "transport_proxy": "",
     "login_mode": "browser",
     "default_model": "auto",
     "reasoning_effort": "auto",
@@ -330,6 +333,7 @@ class ChatgptCodexPlugin(Star):
         values: dict[str, Any] = {}
         string_fields = {
             "codex_path",
+            "transport_proxy",
             "default_model",
             "reasoning_effort",
             "harness_mode",
@@ -350,6 +354,10 @@ class ChatgptCodexPlugin(Star):
                 if value not in {"browser", "device_code"}:
                     raise ValueError("登录方式只能是 browser 或 device_code。")
                 values[key] = value
+            elif key == "backend_mode":
+                if value not in {"app_server", "transport", "auto"}:
+                    raise ValueError("backend_mode 只能是 app_server、transport 或 auto。")
+                values[key] = value
             elif key == "harness_mode":
                 if value not in {"lightweight", "codex"}:
                     raise ValueError("harness_mode 只能是 lightweight 或 codex。")
@@ -358,6 +366,19 @@ class ChatgptCodexPlugin(Star):
                 if value not in {"none", "minimal", "all"}:
                     raise ValueError("tool_router 只能是 none、minimal 或 all。")
                 values[key] = value
+            elif key == "transport_proxy":
+                if not isinstance(value, str) or len(value.strip()) > 512:
+                    raise ValueError("Transport 代理必须是 512 个字符以内的文本。")
+                proxy = value.strip()
+                if proxy:
+                    parsed = urlsplit(proxy)
+                    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                        raise ValueError("Transport 代理必须是 http:// 或 https:// 地址。")
+                    if parsed.username or parsed.password:
+                        raise ValueError("Transport 代理地址不能包含用户名或密码。")
+                    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+                        raise ValueError("Transport 代理只支持主机和端口，不支持路径或查询参数。")
+                values[key] = proxy
             elif key in string_fields:
                 if not isinstance(value, str) or len(value.strip()) > 512:
                     raise ValueError(f"{key} 必须是 512 个字符以内的文本。")
@@ -401,6 +422,10 @@ class ChatgptCodexPlugin(Star):
                         self.service.manager.force_http_transport = bool(
                             self.config.get("force_http_transport", True)
                         )
+                        if "transport_proxy" in values:
+                            self.service.transport.set_proxy(
+                                str(self.config.get("transport_proxy", "") or "")
+                            )
                         if (
                             "usage_timezone" in values
                             or "usage_retention_days" in values
@@ -566,6 +591,23 @@ class ChatgptCodexPlugin(Star):
             )
         except Exception as exc:
             yield event.plain_result(f"配额读取失败：{safe_error(exc)}")
+
+    @gpt.command("benchmark")
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    async def gpt_benchmark(self, event: AstrMessageEvent, backend: str = "transport"):
+        """Run one explicit real hello benchmark; never runs automatically."""
+
+        if backend not in {"transport", "app_server"}:
+            yield event.plain_result("用法：/gpt benchmark transport 或 /gpt benchmark app_server")
+            return
+        try:
+            result = await self.service.benchmark_backend(backend)
+            yield event.plain_result(
+                f"已完成一次真实 {backend} hello benchmark（会产生一次实际用量）：\n"
+                + self._fmt(result)
+            )
+        except Exception as exc:
+            yield event.plain_result(f"benchmark 失败：{safe_error(exc)}")
 
     @gpt.command("usage")
     async def gpt_usage(self, event: AstrMessageEvent, period: str = "30d"):

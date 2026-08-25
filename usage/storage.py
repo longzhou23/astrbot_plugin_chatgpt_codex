@@ -409,7 +409,14 @@ class UsageStorage:
     def _recent_turns_sync(self, limit: int) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM usage_records ORDER BY timestamp DESC LIMIT ?",
+                "SELECT * FROM usage_records "
+                "WHERE input_tokens IS NOT NULL "
+                "OR cached_input_tokens IS NOT NULL "
+                "OR output_tokens IS NOT NULL "
+                "OR reasoning_tokens IS NOT NULL "
+                "OR total_tokens IS NOT NULL "
+                "OR cache_write_input_tokens IS NOT NULL "
+                "ORDER BY timestamp DESC LIMIT ?",
                 (max(1, min(200, int(limit))),),
             ).fetchall()
             return [dict(row) for row in rows]

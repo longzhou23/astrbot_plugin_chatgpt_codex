@@ -4,6 +4,17 @@
     "description": "Codex 可执行文件路径或命令名，例如 codex；如果不在 PATH 中，请填写绝对路径。",
     "default": "codex"
   },
+  "backend_mode": {
+    "type": "string",
+    "options": ["app_server", "transport", "auto"],
+    "description": "推理后端：app_server 使用 Codex Agent Loop；transport 仅使用 Codex Responses HTTP/SSE；auto 先尝试 transport，失败后回退 app_server。默认保持 app_server。",
+    "default": "app_server"
+  },
+  "transport_proxy": {
+    "type": "string",
+    "description": "Responses Transport 使用的 HTTPS 代理，例如 http://127.0.0.1:7890。AstrBot 启动时会清理系统代理，因此需要时请在这里显式填写；不要填写用户名或密码。",
+    "default": ""
+  },
   "login_mode": {
     "type": "string",
     "description": "ChatGPT 登录方式：浏览器 OAuth 或 Device Code。",

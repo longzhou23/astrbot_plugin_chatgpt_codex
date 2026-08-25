@@ -187,6 +187,39 @@ class UsageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary["window"]["total_tokens"], 120)
         self.assertIsNone(summary["window"]["reasoning_tokens"])
 
+    async def test_empty_usage_payload_is_not_presented_as_a_turn(self) -> None:
+        recorded = await self.service.record_turn_usage(
+            conversation_id="session",
+            thread_id=None,
+            turn_id="empty-usage",
+            model="m",
+            reasoning_effort="auto",
+            usage=None,
+        )
+        self.assertFalse(recorded)
+        self.assertEqual(await self.service.recent_turns(10), [])
+
+    async def test_transport_snake_case_usage_is_persisted(self) -> None:
+        recorded = await self.service.record_turn_usage(
+            conversation_id="transport-session",
+            thread_id=None,
+            turn_id="transport-response-1",
+            model="gpt-transport",
+            reasoning_effort="low",
+            usage={
+                "input_tokens": 100,
+                "cached_input_tokens": 20,
+                "output_tokens": 7,
+                "reasoning_tokens": 2,
+                "total_tokens": 107,
+            },
+        )
+        self.assertTrue(recorded)
+        row = (await self.service.recent_turns(1))[0]
+        self.assertEqual(row["model"], "gpt-transport")
+        self.assertEqual(row["total_tokens"], 107)
+        self.assertEqual(row["cached_input_tokens"], 20)
+
     async def test_timezone_boundary_and_daily_aggregation(self) -> None:
         # 16:30 UTC is 00:30 on the next day in Asia/Shanghai.
         await self.service.record_turn_usage(

@@ -106,8 +106,17 @@ class UsageService:
         await self.initialize()
         now = int(timestamp if timestamp is not None else time.time())
         if isinstance(usage, dict):
-            usage = TokenUsage.from_dict(usage.get("last", usage))
+            raw_usage = usage.get("last", usage)
+            # App Server events use camelCase; Responses Transport usage is
+            # already normalized to snake_case.  Accept both at this boundary
+            # so direct transport responses are persisted as real turns.
+            usage = TokenUsage.from_snake_dict(raw_usage) or TokenUsage.from_dict(raw_usage)
         values = usage.as_dict() if isinstance(usage, TokenUsage) else {}
+        # Do not turn a completed request without a usage payload into an
+        # apparently valid, all-null Usage row.  The response itself remains
+        # successful; only the local statistics record is skipped.
+        if not any(values.get(field) is not None for field in TokenUsage.__dataclass_fields__):
+            return False
         record = UsageRecord(
             timestamp=now,
             local_date=self._local_date(now),

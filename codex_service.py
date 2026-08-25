@@ -32,6 +32,8 @@ from .model_catalog import CodexModel, ModelCatalog, parse_models
 from .process_manager import CodexProcessManager
 from .session_store import SessionStore
 from .tool_bridge import ToolBridge
+from .transport import CodexTransportClient
+from .transport.types import TransportError, TransportModelError
 from .usage.models import UsageSnapshot, parse_usage_snapshot_event
 from .usage.service import UsageService
 
@@ -47,6 +49,11 @@ class CodexService:
         self.config = config
         self.logger = logger or logging.getLogger(__name__)
         self.codex_home = self.data_dir / "CODEX_HOME"
+        self.transport = CodexTransportClient(
+            self.codex_home,
+            timeout=float(config.get("turn_timeout", 600) or 600),
+            proxy_url=str(config.get("transport_proxy", "") or ""),
+        )
         self.manager = CodexProcessManager(
             str(config.get("codex_path", "codex")),
             self.codex_home,
@@ -142,6 +149,11 @@ class CodexService:
     @property
     def tool_router_mode(self) -> str:
         return normalize_tool_router(self.config.get("tool_router", "minimal"))
+
+    @property
+    def backend_mode(self) -> str:
+        value = str(self.config.get("backend_mode", "app_server") or "app_server").lower()
+        return value if value in {"app_server", "transport", "auto"} else "app_server"
 
     def set_harness_mode(self, mode: str) -> None:
         self.config["harness_mode"] = normalize_harness_mode(mode)
@@ -282,6 +294,10 @@ class CodexService:
             raise
 
     async def account_read(self, refresh: bool = False) -> dict[str, Any]:
+        if self.backend_mode == "transport":
+            account = await self.transport.get_account()
+            self._account = account or None
+            return account
         result = await self._request("account/read", {"refreshToken": bool(refresh)})
         account = result.get("account") if isinstance(result, dict) else None
         if isinstance(account, dict):
@@ -432,6 +448,8 @@ class CodexService:
         self._browser_callback_port = None
 
     async def read_quota(self) -> dict[str, Any]:
+        if self.backend_mode == "transport":
+            return await self.transport.get_rate_limits()
         result = await self._request("account/rateLimits/read", {}, timeout=30)
         if isinstance(result, dict):
             self._rate_limits = (
@@ -453,6 +471,10 @@ class CodexService:
     async def list_models(self, *, refresh: bool = False) -> list[CodexModel]:
         if self.catalog.is_fresh() and not refresh:
             return self.catalog.models
+        if self.backend_mode == "transport":
+            models = await self.transport.list_models()
+            self.catalog.replace(models)
+            return models
         try:
             result = await self._request("model/list", {"includeHidden": False}, timeout=30)
             models = parse_models(result if isinstance(result, dict) else {})
@@ -509,6 +531,9 @@ class CodexService:
         )
         return {
             "process": self.manager.status,
+            "backend_mode": self.backend_mode,
+            "agent_loop": "astrbot",
+            "codex_agent_loop": self.backend_mode != "transport",
             "account": account,
             "model": self._default_model,
             "effort": self._effort,
@@ -546,6 +571,35 @@ class CodexService:
             "last_turn_context": context,
             "note": "仅为转发组成估算；exact_token_count=false 时不等于服务端 tokenizer 计数。",
         }
+
+    async def benchmark_backend(self, backend: str) -> dict[str, Any]:
+        """Run one explicit, real hello request through one selected backend."""
+
+        if backend not in {"app_server", "transport"}:
+            raise ValueError("benchmark backend 只能是 app_server 或 transport")
+        previous = self.config.get("backend_mode", "app_server")
+        self.config["backend_mode"] = backend
+        session_key = f"__codex_benchmark__:{backend}:{uuid.uuid4().hex}"
+        started = time.monotonic()
+        try:
+            text = await self.run_turn(
+                session_key=session_key,
+                prompt="hello",
+                contexts=[],
+                system_prompt="Reply with one short greeting.",
+                model=self._default_model,
+            )
+            result = dict(self._last_turn or {})
+            result.update(
+                {
+                    "backend": backend,
+                    "elapsed_ms": round((time.monotonic() - started) * 1000, 1),
+                    "response_text_chars": len(text),
+                }
+            )
+            return result
+        finally:
+            self.config["backend_mode"] = previous
 
     @staticmethod
     def _content_text(content: Any) -> str:
@@ -749,7 +803,161 @@ class CodexService:
         system_prompt: str | None = None,
         extra_user_content_parts: list[Any] | None = None,
         model: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
+        """Run one turn using the selected backend, with explicit auto fallback."""
+
+        if self.backend_mode == "app_server":
+            async for event in self._stream_app_server_turn(
+                session_key=session_key,
+                prompt=prompt,
+                contexts=contexts,
+                system_prompt=system_prompt,
+                extra_user_content_parts=extra_user_content_parts,
+                model=model,
+                tools=tools,
+            ):
+                yield event
+            return
+        if self.backend_mode == "transport":
+            async for event in self._stream_transport_turn(
+                session_key=session_key,
+                prompt=prompt,
+                contexts=contexts,
+                system_prompt=system_prompt,
+                extra_user_content_parts=extra_user_content_parts,
+                model=model,
+                tools=tools,
+                emit_deltas=True,
+            ):
+                yield event
+            return
+        try:
+            async for event in self._stream_transport_turn(
+                session_key=session_key,
+                prompt=prompt,
+                contexts=contexts,
+                system_prompt=system_prompt,
+                extra_user_content_parts=extra_user_content_parts,
+                model=model,
+                tools=tools,
+                emit_deltas=False,
+            ):
+                yield event
+        except TransportError as exc:
+            # Transport output is buffered until its terminal event by the
+            # provider; falling back here cannot duplicate visible text.
+            self.logger.warning("Transport backend unavailable; falling back to app-server: %s", type(exc).__name__)
+            async for event in self._stream_app_server_turn(
+                session_key=session_key,
+                prompt=prompt,
+                contexts=contexts,
+                system_prompt=system_prompt,
+                extra_user_content_parts=extra_user_content_parts,
+                model=model,
+                tools=tools,
+            ):
+                yield event
+
+    async def _stream_transport_turn(
+        self,
+        *,
+        session_key: str,
+        prompt: str | None,
+        contexts: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+        extra_user_content_parts: list[Any] | None = None,
+        model: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        emit_deltas: bool = True,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Stateless Responses transport; AstrBot supplies the full history."""
+
+        timeout = max(30.0, min(3600.0, float(self.config.get("turn_timeout", 600))))
+        async with self._turn_slots, self.sessions.lock_for(session_key):
+            await self.usage.initialize()
+            selected_model = model or self._default_model
+            if selected_model == "auto":
+                models = await self.list_models()
+                selected_model = models[0].id if models else ""
+            if not selected_model:
+                raise TransportModelError("没有可用于 transport 的模型")
+            from .transport.responses import build_input_items
+
+            instructions = self._stable_system_prompt(system_prompt)
+            input_items = build_input_items(contexts, prompt, extra_user_content_parts)
+            started = time.monotonic()
+            final_text = ""
+            tool_calls: list[dict[str, Any]] = []
+            usage: dict[str, Any] | None = None
+            response_id: str | None = None
+            async with asyncio.timeout(timeout):
+                async for event in self.transport.stream_chat(
+                    model=selected_model,
+                    instructions=instructions,
+                    input_items=input_items,
+                    effort=self._effort,
+                    tools=tools,
+                    prompt_cache_key=hashlib.sha256(session_key.encode("utf-8")).hexdigest(),
+                ):
+                    if event.get("kind") == "delta":
+                        if emit_deltas:
+                            yield {"kind": "delta", "text": str(event.get("text", ""))}
+                    elif event.get("kind") == "final":
+                        final_text = str(event.get("text", ""))
+                        tool_calls = event.get("tool_calls") if isinstance(event.get("tool_calls"), list) else []
+                        usage = event.get("usage") if isinstance(event.get("usage"), dict) else None
+                        response_id = event.get("response_id") if isinstance(event.get("response_id"), str) else None
+            if not final_text and not tool_calls:
+                raise TransportError("Codex transport 返回空响应")
+            usage_diagnostic = None
+            if usage:
+                try:
+                    usage_diagnostic = await self.usage.record_turn_usage(
+                        conversation_id=session_key,
+                        thread_id=None,
+                        turn_id=response_id,
+                        model=selected_model,
+                        reasoning_effort=self._effort,
+                        usage={
+                            "input_tokens": usage.get("input_tokens"),
+                            "cached_input_tokens": usage.get("cached_input_tokens"),
+                            "output_tokens": usage.get("output_tokens"),
+                            "reasoning_tokens": usage.get("reasoning_tokens"),
+                            "total_tokens": usage.get("total_tokens"),
+                            "cache_write_input_tokens": usage.get("cache_write_input_tokens"),
+                        },
+                    )
+                except Exception as exc:
+                    self.logger.warning("Unable to persist transport usage: %s", type(exc).__name__)
+            self._last_usage = {"total": usage, "source": "responses.completed"} if usage else None
+            self._last_turn = {
+                "backend": "transport",
+                "model": selected_model,
+                "reasoning_effort": self._effort,
+                "latency_ms": round((time.monotonic() - started) * 1000, 1),
+                "usage": usage,
+                "usage_diagnostic": usage_diagnostic,
+                "thread_id": None,
+                "response_id": response_id,
+            }
+            if tool_calls:
+                yield {"kind": "tool_call", "tool_calls": tool_calls}
+            else:
+                yield {"kind": "final", "text": final_text}
+
+    async def _stream_app_server_turn(
+        self,
+        *,
+        session_key: str,
+        prompt: str | None,
+        contexts: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+        extra_user_content_parts: list[Any] | None = None,
+        model: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        del tools
         timeout = max(30.0, min(3600.0, float(self.config.get("turn_timeout", 600))))
         async with self._turn_slots, self.sessions.lock_for(session_key):
             await self.usage.initialize()

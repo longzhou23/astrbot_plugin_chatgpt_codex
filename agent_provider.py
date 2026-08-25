@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncGenerator
 from typing import Any
 
 from .codex_service import CodexService
+from .transport.responses import openai_tools_to_responses
 
 try:
     from astrbot.api.provider import Provider
@@ -96,15 +98,66 @@ async def _stream_frames(
 ) -> AsyncGenerator[tuple[str, bool], None]:
     """Translate service events into AstrBot chunks plus one terminal response."""
 
-    final_text = ""
+    emitted_text = False
     async for event in events:
         if event.get("kind") not in ("delta", "final", "status"):
             continue
         text = str(event.get("text", ""))
         if event.get("kind") == "final":
-            final_text = text
-        yield text, True
-    yield final_text, False
+            if not emitted_text:
+                yield text, True
+        else:
+            if text:
+                emitted_text = True
+                yield text, True
+    # The terminal marker must carry no text: AstrBot uses it to close the
+    # Agent Runner step, while repeating the answer here would render it twice.
+    yield "", False
+
+
+async def _stream_provider_responses(
+    events: AsyncGenerator[dict[str, Any], None],
+) -> AsyncGenerator[LLMResponse, None]:
+    """Keep transport deltas and hand function calls to AstrBot's Agent Runner."""
+
+    final_text = ""
+    emitted_text = False
+    async for event in events:
+        kind = event.get("kind")
+        if kind == "delta":
+            text = str(event.get("text", ""))
+            if text:
+                emitted_text = True
+                yield LLMResponse(role="assistant", completion_text=text, is_chunk=True)
+        elif kind == "tool_call":
+            calls = event.get("tool_calls") if isinstance(event.get("tool_calls"), list) else []
+            args: list[dict[str, Any]] = []
+            names: list[str] = []
+            ids: list[str] = []
+            for call in calls:
+                if not isinstance(call, dict) or not isinstance(call.get("name"), str):
+                    continue
+                raw = call.get("arguments", "{}")
+                try:
+                    value = json.loads(raw) if isinstance(raw, str) else raw
+                except (TypeError, ValueError):
+                    value = {}
+                args.append(value if isinstance(value, dict) else {})
+                names.append(call["name"])
+                ids.append(str(call.get("call_id", "")))
+            if names:
+                yield LLMResponse(
+                    role="assistant",
+                    tools_call_args=args,
+                    tools_call_name=names,
+                    tools_call_ids=ids,
+                    is_chunk=False,
+                )
+        elif kind == "final":
+            final_text = str(event.get("text", ""))
+            if final_text and not emitted_text:
+                yield LLMResponse(role="assistant", completion_text=final_text, is_chunk=True)
+    yield LLMResponse(role="assistant", completion_text="", is_chunk=False)
 
 
 if _ASTRBOT_AVAILABLE:
@@ -171,8 +224,7 @@ if _ASTRBOT_AVAILABLE:
             extra_user_content_parts: list[ContentPart] | None = None,
             **kwargs: Any,
         ) -> LLMResponse:
-            # Codex owns its own Agent Loop. AstrBot tools are deliberately not passed through in MVP.
-            del image_urls, audio_urls, func_tool, tool_calls_result, kwargs
+            del image_urls, audio_urls, tool_calls_result, kwargs
             if session_id is None and _is_title_generation_request(prompt, contexts, system_prompt):
                 return LLMResponse(role="assistant", completion_text="<None>")
             latest_prompt, historical_contexts = _normalize_request_inputs(prompt, contexts)
@@ -183,6 +235,7 @@ if _ASTRBOT_AVAILABLE:
                 system_prompt=system_prompt,
                 extra_user_content_parts=extra_user_content_parts,
                 model=model or self.model_name,
+                tools=openai_tools_to_responses(func_tool),
             )
             return LLMResponse(role="assistant", completion_text=text)
 
@@ -200,7 +253,7 @@ if _ASTRBOT_AVAILABLE:
             extra_user_content_parts: list[ContentPart] | None = None,
             **kwargs: Any,
         ) -> AsyncGenerator[LLMResponse, None]:
-            del image_urls, audio_urls, func_tool, tool_calls_result, kwargs
+            del image_urls, audio_urls, tool_calls_result, kwargs
             if session_id is None and _is_title_generation_request(prompt, contexts, system_prompt):
                 yield LLMResponse(role="assistant", completion_text="<None>", is_chunk=False)
                 return
@@ -212,11 +265,13 @@ if _ASTRBOT_AVAILABLE:
                 system_prompt=system_prompt,
                 extra_user_content_parts=extra_user_content_parts,
                 model=model or self.model_name,
+                tools=openai_tools_to_responses(func_tool),
             )
-            async for text, is_chunk in _stream_frames(events):
+            async for response in _stream_provider_responses(events):
                 # AstrBot's Agent Runner requires the final non-chunk response to
-                # transition the step to DONE. Without it, it invokes Codex again.
-                yield LLMResponse(role="assistant", completion_text=text, is_chunk=is_chunk)
+                # transition the step to DONE. Tool calls are returned as structured
+                # fields so AstrBot, rather than Codex, executes the next loop step.
+                yield response
 
 else:  # pragma: no cover
     CodexProvider = None  # type: ignore[assignment,misc]
