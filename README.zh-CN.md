@@ -1,0 +1,247 @@
+# AstrBot ChatGPT Codex Bridge
+
+[English README](README.md)
+
+这是一个 AstrBot 插件，让 AstrBot 通过官方 Codex 登录能力使用当前
+ChatGPT 账号实际开放的 Codex 模型。插件默认使用本机的 `codex app-server`
+作为稳定后端，也提供一个需要手动启用的实验性 Responses HTTP/SSE Transport
+后端。
+
+插件不使用 ChatGPT 网页 Cookie、浏览器抓包、私有 BFF 接口，也不伪造
+OpenAI API。当前版本为第一个公开 Beta：`v0.3.0-beta.1`。
+
+## 重要说明：Plus 不等于 OpenAI API
+
+ChatGPT Plus 和 OpenAI API 是两套独立的产品、授权和计费体系：
+
+- ChatGPT Plus 不是 OpenAI API Key。
+- 本插件不会把 Plus 订阅声明为 OpenAI API 额度。
+- 模型、套餐和账号配额以 Codex 服务端返回的数据为准。
+- 本地 Usage 页面统计的是插件实际观察到的请求，不替代账号服务端的官方配额页面。
+
+## 当前后端
+
+### `app_server`：默认、推荐
+
+插件启动 `codex app-server --stdio`，通过 Codex App Server 的 JSONL RPC
+协议完成登录、模型发现、thread 管理和 turn 流式响应。这是当前更推荐的
+使用方式，适合日常测试和稳定运行。
+
+### `transport`：实验性
+
+Transport 直接发送 Codex Responses HTTP/SSE 请求，不创建 Codex thread 或
+turn，也不启动 App Server 作为推理后端。它适合验证轻量聊天路径，但使用的
+服务端接口形状来自开源 Codex 客户端实现，未来可能随 Codex 更新变化。
+
+Transport 不提供 Codex 本地 shell、文件系统、MCP、浏览器、电脑控制或其他
+内置工具。AstrBot 选择的函数工具只会以结构化工具调用返回给 AstrBot，当前
+MVP 不执行 Transport 侧的多轮工具循环。
+
+### `auto`
+
+`auto` 会先尝试 Transport，遇到认证、模型、协议、网络或限流失败时回退到
+App Server。每次请求只进行一次回退；配额耗尽不会无限重试。
+
+如果目标是可靠运行，请保持 `app_server`。只有在明确测试 Transport 时才
+选择 `transport` 或 `auto`。
+
+## 安装
+
+### 从 GitHub 安装 Beta
+
+```bash
+git clone --branch v0.3.0-beta.1 --depth 1 \
+  https://github.com/longzhou23/astrbot_plugin_chatgpt_codex.git
+```
+
+将插件目录复制到 AstrBot 的：
+
+```text
+data/plugins/astrbot_plugin_chatgpt_codex
+```
+
+也可以直接下载 [v0.3.0-beta.1 源码压缩包](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex/archive/refs/tags/v0.3.0-beta.1.zip)。
+
+安装后重启 AstrBot，并确认插件已经启用。
+
+## 前置条件
+
+1. 在运行 AstrBot 的主机上安装可执行的 Codex CLI。
+2. 确认命令行可以执行 `codex`，或者在设置中填写绝对路径。
+3. `app_server` 需要支持 `codex app-server --stdio` 的版本。
+4. AstrBot 进程需要能够访问 Codex 登录和推理服务。
+5. 如果主机必须通过本地代理访问网络，请在插件设置中填写明确的
+   `transport_proxy`，例如 `http://127.0.0.1:7890`。
+
+AstrBot 启动时可能会清理继承的系统代理变量，因此不要只依赖系统环境变量。
+代理地址中不要写入用户名或密码。
+
+## WebUI 使用方法
+
+插件页面只有两个主要页面：
+
+- **概览**：账号信息、套餐、配额窗口、重置时间、Usage 汇总、缓存命中情况、
+  最近请求、服务端模型和运行状态。
+- **设置**：中文配置项、后端选择、Codex 路径、登录方式、推理强度、并发数、
+  超时时间、代理和本机工具开关。
+
+进入概览或刷新页面时，插件会重新获取账号状态、服务端模型和可用配额信息。
+如果没有登录，页面会显示登录入口；浏览器 OAuth 完成后，将回调页面显示的
+`localhost` 链接交回插件页面，以完成服务端登录确认。
+
+### 登录
+
+登录态保存在插件独立的 Codex 数据目录中，不会写入 AstrBot 项目根目录，
+也不会把 access token、refresh token 或 device code 写入普通日志。
+
+浏览器登录流程：
+
+1. 在概览页面点击登录。
+2. 打开页面提供的 OAuth 地址并完成 ChatGPT 登录。
+3. 如果浏览器最后跳转到 `localhost` 回调地址，将完整回调地址粘贴回插件页面。
+4. 等待页面显示已登录，然后刷新概览和模型列表。
+
+如果服务器没有图形浏览器，可以在设置中选择 Device Code 登录方式，并按页面
+提示完成授权。
+
+## 配置项
+
+常用配置如下：
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `codex_path` | `codex` | Codex 可执行文件名或绝对路径 |
+| `backend_mode` | `app_server` | `app_server`、`transport` 或 `auto` |
+| `transport_proxy` | 空 | Transport 使用的 HTTPS/HTTP 代理 |
+| `login_mode` | `browser` | 浏览器 OAuth 或 `device_code` |
+| `default_model` | `auto` | 服务端 `model/list` 返回的模型 ID |
+| `reasoning_effort` | `auto` | 服务端声明的推理强度 |
+| `harness_mode` | `lightweight` | 聊天精简外壳或原生 Codex 外壳 |
+| `streaming` | 开启 | AstrBot 支持时使用流式响应 |
+| `max_concurrent_turns` | `2` | 全局并发 turn 数上限 |
+| `turn_timeout` | `600` | 单次请求超时时间，单位为秒 |
+| `enable_local_codex_tools` | 关闭 | 是否允许 Codex 使用本机工具，安全默认关闭 |
+| `usage_timezone` | `Asia/Shanghai` | 本地 Usage 自然日的时区 |
+| `usage_retention_days` | `365` | 本地 Usage 记录保留天数 |
+
+模型 ID 和 reasoning effort 不在插件中硬编码，服务端返回什么就显示什么。
+
+## Usage 统计
+
+概览页面展示插件本地观察到的请求统计，包括：
+
+- 今日、近 7 日、近 30 日和累计 Token。
+- 输入 Token。
+- 缓存输入 Token。
+- 输出 Token。
+- 总 Token。
+- 缓存命中 Token。
+- 缓存命中率。
+- 最近请求的逐条输入、缓存、命中率、输出和总量。
+
+Usage 使用服务端响应中实际返回的 usage 字段，不根据上下文长度或提示词字符
+数估算 Token。Transport 模式只有在 Responses 流返回真实 usage 时才记录用量。
+如果服务端没有返回 usage，页面不会虚构数值。
+
+配额卡片和本地 Usage 是不同数据源：配额卡片来自账号服务端；Usage 是本地
+插件记录。两者的时间窗口、统计口径和刷新时间可能不同。
+
+## 命令
+
+管理员可使用以下命令：
+
+```text
+/gpt status       查看登录、后端和运行状态
+/gpt login        开始 ChatGPT 登录
+/gpt logout       退出登录
+/gpt models       刷新并查看服务端模型
+/gpt model <id>   选择模型
+/gpt effort <级别> 设置 reasoning effort
+/gpt quota        查看账号配额
+/gpt reset        重置当前 AstrBot 会话对应的 Codex thread
+```
+
+敏感操作（登录、退出登录、切换模型和推理强度）限制为管理员。WebUI 是推荐
+的配置和登录入口，命令主要用于管理和排障。
+
+## 安全边界
+
+默认情况下：
+
+- Codex 本机 shell 关闭。
+- 文件系统写入关闭。
+- Codex MCP 关闭。
+- browser/computer control 关闭。
+- 本机工具开关 `enable_local_codex_tools` 关闭。
+- 使用只读、无网络的 App Server 沙箱策略。
+- 不显示隐藏思维链、原始 reasoning、命令文本、内部状态或原始工具输出。
+- 日志会进行脱敏，不记录 access token、refresh token、device code、Cookie 或
+  完整认证 URL。
+
+开启本机 Codex 工具会扩大 AstrBot 进程的本机权限，仅建议在隔离测试环境中使用。
+
+## 会话和响应行为
+
+插件使用 AstrBot 提供的统一 `session_id` 映射 Codex thread：
+
+- 同一会话内的请求串行执行。
+- 不同会话可以并行执行。
+- `/gpt reset` 会重置当前会话映射。
+- 人设、系统提示和上下文由 AstrBot 外层 Agent Runner 管理。
+- App Server 是默认的 Codex Agent Loop；插件不会再套一层重复的 Agent Loop。
+- Transport MVP 将工具调用返回给 AstrBot，不在插件内部执行第二个工具循环。
+
+## 常见问题
+
+### 页面提示未授权或会话过期
+
+确认访问的是当前 AstrBot WebUI 地址，并且浏览器登录态仍有效。重新打开概览
+页面，点击登录；如果 OAuth 最后跳转到 `localhost`，需要把完整回调地址复制回
+插件页面，不能只完成浏览器跳转后直接关闭页面。
+
+### `codex` 找不到
+
+在设置中把 `codex_path` 改成 Codex 可执行文件的绝对路径，然后重启 AstrBot。
+
+### Transport 连接失败或响应很慢
+
+先将 `backend_mode` 改回 `app_server`。如果网络必须通过代理，填写
+`transport_proxy`。Transport 是实验功能，网络、鉴权和服务端接口变化都可能导致
+失败。
+
+### Usage 显示为 0
+
+确认本次请求确实返回了服务端 usage，并刷新概览。历史请求不会根据上下文长度
+补算；没有真实 usage 的请求会保持为空或不计入统计。
+
+### 配额和本地 Usage 不一致
+
+这是允许的：配额是服务端账号窗口，本地 Usage 是插件观察到的请求记录。请以
+服务端配额为准，不要把本地统计当作官方剩余额度。
+
+## 开发和测试
+
+在插件目录运行：
+
+```bash
+python -m pytest -q
+ruff check .
+python -m compileall -q .
+git diff --check
+```
+
+当前 Beta 发布前已通过全部测试、静态检查和 Python 编译检查。
+
+## Beta 限制
+
+- 推荐使用 `app_server`；`transport` 仍然是实验性后端。
+- Codex 客户端或服务端接口变化可能影响 Transport。
+- 当前 Transport MVP 不负责执行多轮工具调用。
+- 账号官方配额仍由 Codex 服务端决定，插件不能增加订阅额度。
+- ChatGPT Plus 不包含 OpenAI API 余额或 API Key。
+
+## 许可证和反馈
+
+本项目为 AstrBot 插件，欢迎通过 GitHub Issues 反馈登录、模型、配额、Transport
+和 UI 问题。反馈时请提供脱敏后的插件日志、AstrBot 版本、Codex 版本和后端模式，
+不要粘贴 token、Cookie、完整 OAuth URL 或个人隐私信息。

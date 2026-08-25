@@ -1,5 +1,7 @@
 # AstrBot ChatGPT Codex Bridge
 
+[中文文档](README.zh-CN.md)
+
 `astrbot_plugin_chatgpt_codex` lets AstrBot use models made available to the signed-in ChatGPT account through the open-source Codex transport implementation. The default is the stable `codex app-server` backend; an explicitly selected experimental `transport` backend can send direct Responses HTTP/SSE requests without creating Codex threads or turns. It does not use ChatGPT web cookies, browser capture, or a fabricated OpenAI-compatible endpoint.
 
 ## First beta release
