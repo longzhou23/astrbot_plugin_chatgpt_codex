@@ -1,0 +1,91 @@
+{
+  "codex_path": {
+    "type": "string",
+    "description": "Codex 可执行文件路径或命令名，例如 codex；如果不在 PATH 中，请填写绝对路径。",
+    "default": "codex"
+  },
+  "login_mode": {
+    "type": "string",
+    "description": "ChatGPT 登录方式：浏览器 OAuth 或 Device Code。",
+    "options": ["browser", "device_code"],
+    "default": "browser"
+  },
+  "default_model": {
+    "type": "string",
+    "description": "服务端 model/list 返回的模型 ID；auto 表示使用第一个可见模型。",
+    "default": "auto"
+  },
+  "reasoning_effort": {
+    "type": "string",
+    "description": "使用服务端 model/list 声明的推理强度；auto 表示交由服务端选择。",
+    "default": "auto"
+  },
+  "streaming": {
+    "type": "bool",
+    "description": "在 AstrBot 支持时使用流式 Provider 调用。",
+    "default": true
+  },
+  "show_tool_status": {
+    "type": "bool",
+    "description": "显示安全的公开工具状态标签；不会显示命令、原始工具输出或隐藏思维链。",
+    "default": false
+  },
+  "max_concurrent_turns": {
+    "type": "int",
+    "description": "所有会话同时运行的 Codex turn 最大数量。",
+    "minimum": 1,
+    "maximum": 32,
+    "default": 2
+  },
+  "turn_timeout": {
+    "type": "int",
+    "description": "单个 turn 的超时时间（秒）；配额耗尽不会无限重试。",
+    "minimum": 30,
+    "maximum": 3600,
+    "default": 600
+  },
+  "max_thread_turns": {
+    "type": "int",
+    "description": "单个 Codex thread 保留的最大已完成 turn 数；0 表示关闭按 turn 轮换。",
+    "minimum": 0,
+    "maximum": 10000,
+    "default": 100
+  },
+  "thread_idle_ttl": {
+    "type": "int",
+    "description": "持久化 Codex thread 空闲多少秒后轮换。",
+    "minimum": 0,
+    "maximum": 31536000,
+    "default": 604800
+  },
+  "thread_max_age": {
+    "type": "int",
+    "description": "持久化 Codex thread 存在多少秒后轮换。",
+    "minimum": 0,
+    "maximum": 31536000,
+    "default": 2592000
+  },
+  "force_http_transport": {
+    "type": "bool",
+    "description": "强制 Codex ChatGPT 流量使用 HTTPS，避免 WebSocket 回退造成反复延迟。",
+    "default": true
+  },
+  "enable_local_codex_tools": {
+    "type": "bool",
+    "description": "危险选项：允许 Codex 使用本机工具；安全默认值为关闭。",
+    "default": false
+  },
+  "usage_timezone": {
+    "type": "string",
+    "description": "Usage 自然日使用的 IANA 时区，例如 Asia/Shanghai。",
+    "default": "Asia/Shanghai"
+  },
+  "usage_retention_days": {
+    "type": "int",
+    "description": "本地 Usage 记录保留天数；0 表示永久保留。每天最多自动清理一次。",
+    "minimum": 0,
+    "maximum": 3650,
+    "default": 365
+  }
+}
+

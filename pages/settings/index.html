@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codex Settings</title>
+<script src="/api/plugin/page/bridge-sdk.js"></script>
+<style>
+:root{color-scheme:light dark;font-family:"Noto Sans SC","Microsoft YaHei",Inter,system-ui,-apple-system,"Segoe UI",sans-serif;--bg:#f6f7f9;--panel:#fff;--text:#1d2433;--muted:#7b8494;--line:#e5e8ee;--accent:#4c9cff;--accent-strong:#2e7de0;--danger:#c04b57;--shadow:0 18px 55px #1520330d}*{box-sizing:border-box}body,button,a,input,select{font-family:inherit}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text)}a{color:inherit;text-decoration:none}.shell{max-width:960px;margin:auto;padding:34px 24px 70px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:30px}.wordmark{font-weight:800;letter-spacing:-.02em}.wordmark span{color:var(--accent)}.nav{display:flex;gap:6px;padding:4px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}.nav a{padding:7px 14px;border-radius:999px;color:var(--muted);font-size:13px;font-weight:700}.nav a.active{background:var(--text);color:var(--panel)}.hero{margin:12px 0 24px}.hero h1{margin:0;font-size:32px;letter-spacing:-.04em}.hero p{max-width:700px;color:var(--muted);font-size:13px;line-height:1.65}.card{padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:var(--shadow)}.section-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:22px}.section-head h2{margin:0;font-size:18px}.section-head p{margin:6px 0 0;color:var(--muted);font-size:12px}.pill{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border-radius:99px;padding:5px 9px;font-size:12px;font-weight:700;background:#eef1f5;color:#667085}.pill:before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}.pill.ok{background:#edf7f2;color:#16805b}.pill.wait{background:#fff6df;color:#9a6700}.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.setting{min-width:0}.setting-wide{grid-column:1/-1}.setting label{display:block;font-size:13px;font-weight:750;margin-bottom:6px}.setting small{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:6px}.setting input[type=text],.setting input[type=number],.setting select{width:100%;min-height:38px;border:1px solid #cbd5e1;border-radius:8px;background:var(--panel);color:var(--text);padding:8px 10px;font-size:13px}.setting input:focus,.setting select:focus{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:1px}.setting-toggle{display:flex;align-items:center;gap:9px;min-height:38px}.setting-toggle input{width:17px;height:17px;accent-color:var(--accent)}.setting-toggle label{margin:0}.warning{margin-top:20px;padding:12px 13px;border-radius:9px;background:#fff7e5;color:#745209;font-size:12px;line-height:1.6}.footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:23px}.hint{color:var(--muted);font-size:12px}.button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);padding:8px 13px;font-size:13px;font-weight:750;cursor:pointer}.button.primary{border-color:var(--accent);background:var(--accent);color:#fff}.button.primary:hover{background:var(--accent-strong)}.button:disabled{opacity:.55;cursor:wait}.message{min-height:23px;margin-top:17px;color:var(--muted);font-size:13px}.message.success{color:#16805b}.message.error{color:var(--danger)}.privacy{margin-top:25px;text-align:center;color:var(--muted);font-size:11px}@media(prefers-color-scheme:dark){:root{--bg:#101318;--panel:#171b22;--text:#edf1f7;--muted:#929baa;--line:#2a303a;--shadow:0 18px 55px #00000025}.nav a.active{background:#edf1f7;color:#171b22}.setting input[type=text],.setting input[type=number],.setting select{border-color:var(--line)}.warning{background:#33290f;color:#ffdb90}}@media(max-width:700px){.shell{padding:24px 14px 50px}.topbar{align-items:flex-start;flex-direction:column}.settings-grid{grid-template-columns:1fr}.setting-wide{grid-column:auto}.footer{align-items:flex-start;flex-direction:column}.hero h1{font-size:28px}}
+</style>
+<style>
+:root[data-theme="light"]{color-scheme:light;--bg:#f6f7f9;--panel:#fff;--text:#1d2433;--muted:#7b8494;--line:#e5e8ee;--shadow:0 18px 55px #1520330d}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#101318;--panel:#171b22;--text:#edf1f7;--muted:#929baa;--line:#2a303a;--shadow:0 18px 55px #00000025}
+.theme-toggle{border:0;border-radius:7px;background:color-mix(in srgb,var(--text) 8%,transparent);color:var(--text);padding:7px 10px;font:inherit;font-size:12px;font-weight:750;cursor:pointer}
+.theme-toggle:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}
+.button{border:0;border-radius:7px;background:color-mix(in srgb,var(--text) 8%,transparent);box-shadow:none}
+.button:hover{background:color-mix(in srgb,var(--text) 14%,transparent)}
+.button.primary{border:0;background:var(--accent);color:#fff}
+.button.primary:hover{background:var(--accent-strong)}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="topbar"><div class="wordmark">AstrBot <span>· Codex</span></div><nav class="nav"><a data-top-nav target="_top" href="/#/plugin-page/astrbot_plugin_chatgpt_codex/account">概览</a><a data-top-nav class="active" target="_top" href="/#/plugin-page/astrbot_plugin_chatgpt_codex/settings">设置</a><button id="themeToggle" class="theme-toggle" type="button">亮色模式</button></nav></div>
+  <header class="hero"><h1>插件设置</h1><p>管理 Codex App Server、模型选择、会话缓存和安全策略。配置通过当前 AstrBot WebUI 会话保存，不会读取或展示登录凭据。</p></header>
+  <section class="card">
+    <div class="section-head"><div><h2>ChatGPT Codex 配置</h2><p>保存后会自动校验类型和范围；部分进程参数需要重启 AstrBot 才会完全生效。</p></div><span id="settingsState" class="pill">读取中</span></div>
+    <form id="settingsForm">
+      <div class="settings-grid">
+        <div class="setting setting-wide"><label for="setting_codex_path">Codex 可执行文件</label><input id="setting_codex_path" data-setting="codex_path" type="text" autocomplete="off"><small>命令名或绝对路径，例如 codex；如果不在 PATH 中，请填写绝对路径。</small></div>
+        <div class="setting"><label for="setting_login_mode">登录方式</label><select id="setting_login_mode" data-setting="login_mode"><option value="browser">浏览器 OAuth（推荐）</option><option value="device_code">Device Code（无图形服务器）</option></select><small>仅影响下一次启动登录流程。</small></div>
+        <div class="setting"><label for="setting_default_model">默认模型</label><input id="setting_default_model" data-setting="default_model" type="text" autocomplete="off"><small>填写服务端 model/list 返回的模型 ID；auto 使用服务端默认模型。</small></div>
+        <div class="setting"><label for="setting_reasoning_effort">推理强度</label><input id="setting_reasoning_effort" data-setting="reasoning_effort" type="text" autocomplete="off"><small>例如 auto、low、medium；以当前模型实际支持项为准。</small></div>
+        <div class="setting"><label for="setting_max_concurrent_turns">最大并发 turn</label><input id="setting_max_concurrent_turns" data-setting="max_concurrent_turns" type="number" min="1" max="32" step="1"><small>所有会话同时运行的 Codex turn 数量。</small></div>
+        <div class="setting"><label for="setting_turn_timeout">单 turn 超时（秒）</label><input id="setting_turn_timeout" data-setting="turn_timeout" type="number" min="30" max="3600" step="1"><small>配额错误不会因为此项被无限重试。</small></div>
+        <div class="setting"><label for="setting_max_thread_turns">单 thread 最大 turn</label><input id="setting_max_thread_turns" data-setting="max_thread_turns" type="number" min="0" max="10000" step="1"><small>0 表示关闭按 turn 轮换。</small></div>
+        <div class="setting"><label for="setting_thread_idle_ttl">thread 空闲轮换（秒）</label><input id="setting_thread_idle_ttl" data-setting="thread_idle_ttl" type="number" min="0" max="31536000" step="1"><small>0 表示不按空闲时间轮换。</small></div>
+        <div class="setting"><label for="setting_thread_max_age">thread 最大寿命（秒）</label><input id="setting_thread_max_age" data-setting="thread_max_age" type="number" min="0" max="31536000" step="1"><small>0 表示不按最大寿命轮换。</small></div>
+        <div class="setting"><label for="setting_usage_timezone">Usage 时区</label><input id="setting_usage_timezone" data-setting="usage_timezone" type="text" autocomplete="off"><small>例如 Asia/Shanghai；用于热力图自然日。</small></div>
+        <div class="setting"><label for="setting_usage_retention_days">Usage 保留天数</label><input id="setting_usage_retention_days" data-setting="usage_retention_days" type="number" min="0" max="3650" step="1"><small>0 表示永久保留，每天最多自动清理一次。</small></div>
+        <div class="setting setting-wide"><label>行为与安全</label><div class="settings-grid">
+          <div class="setting-toggle"><input id="setting_streaming" data-setting="streaming" type="checkbox"><label for="setting_streaming">启用流式调用</label></div>
+          <div class="setting-toggle"><input id="setting_show_tool_status" data-setting="show_tool_status" type="checkbox"><label for="setting_show_tool_status">显示安全工具状态</label></div>
+          <div class="setting-toggle"><input id="setting_force_http_transport" data-setting="force_http_transport" type="checkbox"><label for="setting_force_http_transport">强制 HTTPS 传输</label></div>
+          <div class="setting-toggle"><input id="setting_enable_local_codex_tools" data-setting="enable_local_codex_tools" type="checkbox"><label for="setting_enable_local_codex_tools">允许本机 Codex 工具</label></div>
+        </div></div>
+      </div>
+      <div class="warning"><strong>安全提示：</strong>“允许本机 Codex 工具”默认关闭。开启后可能扩大 Codex 对本机资源的能力边界，请确认风险后再使用。Codex 可执行文件、HTTPS 传输和最大并发设置保存后需要重启 AstrBot。</div>
+      <div class="footer"><span id="settingsHint" class="hint">页面访问时自动读取当前设置。</span><button id="saveSettings" class="button primary" type="submit">保存设置</button></div>
+    </form>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+  </section>
+  <div class="privacy">🔒 设置页面只处理配置白名单；不会读取或展示 access token、refresh token、Cookie 或 OAuth 回调敏感参数。</div>
+</main>
+<script>
+(()=> {
+  const page=window.AstrBotPluginPage,$=id=>document.getElementById(id);
+  let dirty=false;
+  function message(text,kind=""){const n=$("message");n.textContent=text||"";n.className="message "+kind}
+  function errorText(e){const t=String(e?.message||e||"插件请求失败");return /\b(401|unauthori[sz]ed)\b/i.test(t)||/token.*(expired|invalid)/i.test(t)?"AstrBot WebUI 会话未授权或已过期，请先登录管理界面后刷新此页面。":t}
+  async function call(endpoint,body){return body===undefined?await page.apiGet(endpoint):await page.apiPost(endpoint,body)}
+  function dataOf(r){if(r?.status==="error")throw new Error(r.message||"插件请求失败");return r?.status==="ok"?(r.data||{}):(r||{})}
+  function applySettings(values){if(!values||typeof values!=="object")return;document.querySelectorAll("[data-setting]").forEach(node=>{const key=node.dataset.setting;if(!(key in values))return;if(node.type==="checkbox")node.checked=Boolean(values[key]);else node.value=String(values[key]??"")});dirty=false}
+  async function load(){try{const d=dataOf(await call("config"));applySettings(d.config||{});$("settingsState").className="pill ok";$("settingsState").textContent="已读取";$("settingsHint").textContent="页面访问时已读取当前配置。"}catch(e){$("settingsState").className="pill wait";$("settingsState").textContent="读取失败";$("settingsHint").textContent=errorText(e);message(errorText(e),"error")}}
+  async function save(event){event.preventDefault();const b=$("saveSettings"),values={};document.querySelectorAll("[data-setting]").forEach(node=>{values[node.dataset.setting]=node.type==="checkbox"?node.checked:node.type==="number"?Number(node.value):node.value.trim()});b.disabled=true;try{const d=dataOf(await call("config",{config:values}));applySettings(d.config||values);$("settingsState").className="pill ok";$("settingsState").textContent="已保存";$("settingsHint").textContent=d.restartRequired?"设置已保存；部分进程设置将在重启 AstrBot 后生效。":"设置已保存并立即生效。";message($("settingsHint").textContent,"success")}catch(e){$("settingsState").className="pill wait";$("settingsState").textContent="保存失败";$("settingsHint").textContent=errorText(e);message(errorText(e),"error")}finally{b.disabled=false}}
+  function applyTheme(theme){const value=theme==="dark"?"dark":"light";document.documentElement.dataset.theme=value;$("themeToggle").textContent=value==="dark"?"亮色模式":"暗色模式";try{localStorage.setItem("astrbot_codex_theme",value)}catch{}}
+  function initTheme(){let saved="";try{saved=localStorage.getItem("astrbot_codex_theme")||""}catch{}applyTheme(saved||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"))}
+  function wireTopNavigation(){document.querySelectorAll("[data-top-nav]").forEach(link=>link.addEventListener("click",event=>{event.preventDefault();window.parent.location.assign(new URL(link.getAttribute("href"),window.parent.location.href).href)}))}
+  $("settingsForm").addEventListener("submit",save);document.querySelectorAll("[data-setting]").forEach(node=>{node.addEventListener("input",()=>{dirty=true});node.addEventListener("change",()=>{dirty=true})});$("themeToggle").onclick=()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");wireTopNavigation();initTheme();load();
+})();
+</script>
+</body>
+</html>
+

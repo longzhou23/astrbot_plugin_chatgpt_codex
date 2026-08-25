@@ -1,0 +1,1 @@
+# AstrBot supplies the host SDK. This MVP intentionally has no third-party runtime dependency.
