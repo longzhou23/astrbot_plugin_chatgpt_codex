@@ -13,14 +13,43 @@ OpenAI API。当前版本为第一个公开 Beta：`v0.3.0-beta.1`。
 
 首次登录有一个容易忽略的前置条件：
 
-1. 在运行 AstrBot 的主机上安装当前 Codex CLI，或者在插件设置的
-   `codex_path` 中填写 Codex 可执行文件的绝对路径。首次 ChatGPT 登录使用
-   官方 Codex App Server 提供的 OAuth / Device Code RPC。
-2. 重启 AstrBot，打开插件 WebUI 的概览页面，点击 ChatGPT 登录并完成浏览器
+### 1. 先安装 Codex CLI
+
+请以 [OpenAI 官方 Codex CLI 安装/开始使用文档](https://learn.chatgpt.com/docs/codex/cli)
+为准。常用安装方式如下：
+
+**macOS / Linux（独立安装脚本）：**
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+**Windows、macOS 或 Linux（npm）：**
+
+```bash
+npm install -g @openai/codex
+```
+
+npm 方式需要先安装可用的 Node.js/npm。安装后请重新打开终端，并确认命令
+可执行：
+
+```text
+codex --version
+```
+
+这个检查必须使用与 AstrBot 相同的操作系统用户执行。如果 AstrBot 服务账号
+找不到 `codex`，请在插件设置中把 `codex_path` 填成可执行文件的绝对路径，例如
+Windows 的 `C:\\Users\\<user>\\AppData\\Roaming\\npm\\codex.cmd`，或
+Linux/macOS 的 `/usr/local/bin/codex`。首次 ChatGPT 登录使用官方 Codex App
+Server 提供的 OAuth / Device Code RPC。
+
+### 2. 完成首次登录
+
+1. 重启 AstrBot，打开插件 WebUI 的概览页面，点击 ChatGPT 登录并完成浏览器
    OAuth 或 Device Code 授权。
-3. 如果浏览器最后跳转到 `localhost` 回调地址，将完整地址粘贴回插件页面；不要
+2. 如果浏览器最后跳转到 `localhost` 回调地址，将完整地址粘贴回插件页面；不要
    只粘贴 code，也不要把回调地址发到日志或 Issue 中。
-4. 页面显示账号已登录后，登录态会持久化到插件独立的 `CODEX_HOME`。此后推荐的
+3. 页面显示账号已登录后，登录态会持久化到插件独立的 `CODEX_HOME`。此后推荐的
    `transport` 后端可以读取登录态并直接进行 Responses 推理，不会每次请求都启动
    `codex app-server`。
 

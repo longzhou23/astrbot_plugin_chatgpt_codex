@@ -21,15 +21,45 @@ when switching backend modes or changing the Codex executable.
 
 The first login has one extra prerequisite that is easy to miss:
 
-1. Install a current Codex CLI on the AstrBot host, or set `codex_path` to its
-   absolute executable path. The plugin uses the official Codex App Server
-   OAuth / Device Code RPC for the first ChatGPT login.
-2. Restart AstrBot and open the plugin's WebUI overview. Click the ChatGPT
+### 1. Install Codex CLI
+
+Follow the [official OpenAI Codex CLI setup guide](https://learn.chatgpt.com/docs/codex/cli)
+for the current installer. The commonly used commands are:
+
+**macOS / Linux (standalone installer):**
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+**Windows, macOS, or Linux (npm):**
+
+```bash
+npm install -g @openai/codex
+```
+
+The npm route requires a supported Node.js/npm installation. After installation,
+open a new terminal if the command is not immediately visible and verify it:
+
+```text
+codex --version
+```
+
+Run this check as the same operating-system user that runs AstrBot. If the
+service account cannot find `codex` on `PATH`, set `codex_path` in the plugin
+settings to the absolute executable path, for example
+`C:\\Users\\<user>\\AppData\\Roaming\\npm\\codex.cmd` on Windows or
+`/usr/local/bin/codex` on Linux/macOS. The plugin uses the official Codex App
+Server OAuth / Device Code RPC for the first ChatGPT login.
+
+### 2. Complete the first login
+
+1. Restart AstrBot and open the plugin's WebUI overview. Click the ChatGPT
    login button and finish the browser OAuth or Device Code flow.
-3. If browser OAuth ends at a `localhost` callback URL, paste the complete URL
+2. If browser OAuth ends at a `localhost` callback URL, paste the complete URL
    back into the plugin page. Do not paste only the code and do not share the
    URL in logs or issue reports.
-4. After the page reports that the account is logged in, the credentials are
+3. After the page reports that the account is logged in, the credentials are
    persisted in the plugin-owned `CODEX_HOME`. The recommended `transport`
    backend can then read the login state and perform Responses inference
    without starting `codex app-server` for each request.
