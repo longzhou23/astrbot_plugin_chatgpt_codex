@@ -3,9 +3,8 @@
 [English README](README.md)
 
 这是一个 AstrBot 插件，让 AstrBot 通过官方 Codex 登录能力使用当前
-ChatGPT 账号实际开放的 Codex 模型。插件默认使用本机的 `codex app-server`
-作为稳定后端，也提供一个需要手动启用的实验性 Responses HTTP/SSE Transport
-后端。
+ChatGPT 账号实际开放的 Codex 模型。插件推荐默认使用轻量的实验性
+Responses HTTP/SSE Transport 后端；稳定的 `codex app-server` 作为兼容回退保留。
 
 插件不使用 ChatGPT 网页 Cookie、浏览器抓包、私有 BFF 接口，也不伪造
 OpenAI API。当前版本为第一个公开 Beta：`v0.3.0-beta.1`。
@@ -21,29 +20,30 @@ ChatGPT Plus 和 OpenAI API 是两套独立的产品、授权和计费体系：
 
 ## 当前后端
 
-### `app_server`：默认、推荐
-
-插件启动 `codex app-server --stdio`，通过 Codex App Server 的 JSONL RPC
-协议完成登录、模型发现、thread 管理和 turn 流式响应。这是当前更推荐的
-使用方式，适合日常测试和稳定运行。
-
-### `transport`：实验性
+### `transport`：默认、推荐
 
 Transport 直接发送 Codex Responses HTTP/SSE 请求，不创建 Codex thread 或
-turn，也不启动 App Server 作为推理后端。它适合验证轻量聊天路径，但使用的
-服务端接口形状来自开源 Codex 客户端实现，未来可能随 Codex 更新变化。
+turn，也不启动 App Server 作为推理后端。它是当前推荐的轻量聊天路径，适合
+AstrBot 普通对话；服务端接口形状来自开源 Codex 客户端实现，未来可能随 Codex
+更新变化。
 
 Transport 不提供 Codex 本地 shell、文件系统、MCP、浏览器、电脑控制或其他
 内置工具。AstrBot 选择的函数工具只会以结构化工具调用返回给 AstrBot，当前
 MVP 不执行 Transport 侧的多轮工具循环。
+
+### `app_server`：稳定兼容回退
+
+插件启动 `codex app-server --stdio`，通过 Codex App Server 的 JSONL RPC
+协议完成登录、模型发现、thread 管理和 turn 流式响应。需要稳定的 Codex
+Agent Loop 或 Transport 不可用时，可以在设置中显式选择此后端。
 
 ### `auto`
 
 `auto` 会先尝试 Transport，遇到认证、模型、协议、网络或限流失败时回退到
 App Server。每次请求只进行一次回退；配额耗尽不会无限重试。
 
-如果目标是可靠运行，请保持 `app_server`。只有在明确测试 Transport 时才
-选择 `transport` 或 `auto`。
+如果希望由插件自动尝试 Transport 并在失败时回退，请选择 `auto`。如果目标是
+使用稳定的 Codex Agent Server 协议，请显式选择 `app_server`。
 
 ## 安装
 
@@ -67,8 +67,10 @@ data/plugins/astrbot_plugin_chatgpt_codex
 ## 前置条件
 
 1. 在运行 AstrBot 的主机上安装可执行的 Codex CLI。
-2. 确认命令行可以执行 `codex`，或者在设置中填写绝对路径。
-3. `app_server` 需要支持 `codex app-server --stdio` 的版本。
+2. 确认命令行可以执行 `codex`，或者在设置中填写绝对路径。Transport 推理本身
+   不启动 App Server，但首次 ChatGPT OAuth / Device Code 登录仍通过官方
+   `codex app-server` 登录 RPC 完成。
+3. `app_server` 推理需要支持 `codex app-server --stdio` 的版本。
 4. AstrBot 进程需要能够访问 Codex 登录和推理服务。
 5. 如果主机必须通过本地代理访问网络，请在插件设置中填写明确的
    `transport_proxy`，例如 `http://127.0.0.1:7890`。
@@ -111,7 +113,7 @@ AstrBot 启动时可能会清理继承的系统代理变量，因此不要只依
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `codex_path` | `codex` | Codex 可执行文件名或绝对路径 |
-| `backend_mode` | `app_server` | `app_server`、`transport` 或 `auto` |
+| `backend_mode` | `transport` | `transport`（推荐）、`app_server`（稳定回退）或 `auto` |
 | `transport_proxy` | 空 | Transport 使用的 HTTPS/HTTP 代理 |
 | `login_mode` | `browser` | 浏览器 OAuth 或 `device_code` |
 | `default_model` | `auto` | 服务端 `model/list` 返回的模型 ID |
@@ -173,7 +175,8 @@ Usage 使用服务端响应中实际返回的 usage 字段，不根据上下文�
 - Codex MCP 关闭。
 - browser/computer control 关闭。
 - 本机工具开关 `enable_local_codex_tools` 关闭。
-- 使用只读、无网络的 App Server 沙箱策略。
+- Transport 不暴露 Codex 本机能力面；选择 `app_server` 时使用只读、无网络的
+  沙箱策略。
 - 不显示隐藏思维链、原始 reasoning、命令文本、内部状态或原始工具输出。
 - 日志会进行脱敏，不记录 access token、refresh token、device code、Cookie 或
   完整认证 URL。
@@ -188,7 +191,8 @@ Usage 使用服务端响应中实际返回的 usage 字段，不根据上下文�
 - 不同会话可以并行执行。
 - `/gpt reset` 会重置当前会话映射。
 - 人设、系统提示和上下文由 AstrBot 外层 Agent Runner 管理。
-- App Server 是默认的 Codex Agent Loop；插件不会再套一层重复的 Agent Loop。
+- Transport 是默认的轻量路径；插件不会在 Transport 内部套第二个 Agent Loop。
+- App Server 是稳定兼容回退；插件不会在 App Server 外部再套一层重复的 Agent Loop。
 - Transport MVP 将工具调用返回给 AstrBot，不在插件内部执行第二个工具循环。
 
 ## 常见问题
@@ -205,9 +209,9 @@ Usage 使用服务端响应中实际返回的 usage 字段，不根据上下文�
 
 ### Transport 连接失败或响应很慢
 
-先将 `backend_mode` 改回 `app_server`。如果网络必须通过代理，填写
-`transport_proxy`。Transport 是实验功能，网络、鉴权和服务端接口变化都可能导致
-失败。
+如果 Transport 连接失败，先填写 `transport_proxy`（如网络必须通过代理），或将
+`backend_mode` 改为稳定的 `app_server`。Transport 是实验功能，网络、鉴权和
+服务端接口变化都可能导致失败。
 
 ### Usage 显示为 0
 
@@ -234,7 +238,7 @@ git diff --check
 
 ## Beta 限制
 
-- 推荐使用 `app_server`；`transport` 仍然是实验性后端。
+- 推荐使用 `transport`；`app_server` 是稳定兼容回退。
 - Codex 客户端或服务端接口变化可能影响 Transport。
 - 当前 Transport MVP 不负责执行多轮工具调用。
 - 账号官方配额仍由 Codex 服务端决定，插件不能增加订阅额度。

@@ -6,9 +6,9 @@
   },
   "backend_mode": {
     "type": "string",
-    "options": ["app_server", "transport", "auto"],
-    "description": "推理后端：app_server 使用 Codex Agent Loop；transport 仅使用 Codex Responses HTTP/SSE；auto 先尝试 transport，失败后回退 app_server。默认保持 app_server。",
-    "default": "app_server"
+    "options": ["transport", "app_server", "auto"],
+    "description": "推理后端：transport（推荐）仅使用 Codex Responses HTTP/SSE；app_server 使用稳定的 Codex Agent Loop；auto 先尝试 transport，失败后回退 app_server。新配置默认使用 transport。",
+    "default": "transport"
   },
   "transport_proxy": {
     "type": "string",

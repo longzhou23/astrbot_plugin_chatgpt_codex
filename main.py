@@ -31,7 +31,7 @@ def _data_dir() -> Path:
 
 CONFIG_DEFAULTS: dict[str, Any] = {
     "codex_path": "codex",
-    "backend_mode": "app_server",
+    "backend_mode": "transport",
     "transport_proxy": "",
     "login_mode": "browser",
     "default_model": "auto",

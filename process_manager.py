@@ -97,6 +97,13 @@ class CodexProcessManager:
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
                 )
+            except FileNotFoundError as exc:
+                self.last_error = "找不到 Codex 可执行文件"
+                raise CodexProcessError(
+                    "找不到 Codex 可执行文件。请先安装 Codex CLI，或在插件设置的 "
+                    "codex_path 中填写 codex 的绝对路径；Transport 推理不启动 App Server，"
+                    "但首次 ChatGPT 登录仍需要通过 Codex App Server 完成官方 OAuth。"
+                ) from exc
             except (OSError, ValueError) as exc:
                 self.last_error = redact_text(str(exc))
                 raise CodexProcessError(

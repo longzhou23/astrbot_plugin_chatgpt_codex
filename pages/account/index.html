@@ -68,9 +68,9 @@
   </section>
   <section class="section overview-grid">
     <article class="info-card"><h3>活动洞察</h3><div class="info-list"><div class="info-row"><span>主配额窗口</span><strong id="quotaWindow">—</strong></div><div class="info-row"><span>已使用</span><strong id="quotaUsed">—</strong></div><div class="quota-track"><span id="quotaBar"></span></div><div class="quota-meta"><span>0%</span><span id="quotaReset">重置：—</span><span>100%</span></div><div class="info-row"><span>Credits</span><strong id="quotaCredits">—</strong></div></div></article>
-    <article class="info-card"><h3>账户状态</h3><div class="info-list"><div class="info-row"><span>App Server</span><strong id="serverStatus">—</strong></div><div class="info-row"><span>套餐</span><strong id="accountPlan">—</strong></div><div class="info-row"><span>当前模型</span><strong id="currentModel">auto</strong></div><div class="info-row"><span>推理强度</span><strong id="currentEffort">auto</strong></div><div class="info-row"><span>可用重置次数</span><strong id="resetCredits">—</strong></div></div></article>
+    <article class="info-card"><h3>账户状态</h3><div class="info-list"><div class="info-row"><span>推理后端</span><strong id="serverStatus">—</strong></div><div class="info-row"><span>套餐</span><strong id="accountPlan">—</strong></div><div class="info-row"><span>当前模型</span><strong id="currentModel">auto</strong></div><div class="info-row"><span>推理强度</span><strong id="currentEffort">auto</strong></div><div class="info-row"><span>可用重置次数</span><strong id="resetCredits">—</strong></div></div></article>
   </section>
-  <section class="section"><div class="section-title"><div><h2>服务端模型</h2><p>模型列表和推理强度由 Codex App Server 动态提供。</p></div><a data-local-tab="settings" class="button" href="#settings">管理设置</a></div><div class="info-card"><div id="models" class="model-list"><div class="model-row"><span>等待读取模型…</span></div></div></div></section>
+  <section class="section"><div class="section-title"><div><h2>服务端模型</h2><p>模型列表和推理强度由当前 Codex 后端动态提供。</p></div><a data-local-tab="settings" class="button" href="#settings">管理设置</a></div><div class="info-card"><div id="models" class="model-list"><div class="model-row"><span>等待读取模型…</span></div></div></div></section>
   </div>
   <section id="usagePanel" class="section settings-panel" hidden>
     <div class="section-title"><div><h2>使用量</h2><p>仅统计插件安装后，Codex 返回的真实 turn 使用量。</p></div><div class="usage-periods"><button data-usage-days="365" class="active">一年</button></div></div>
@@ -81,11 +81,11 @@
     <section class="section"><div class="section-title"><div><h2>官方配额</h2><p>此处是 Codex 账户窗口，与本地 Token 使用量分开显示。</p></div><button id="usageRateRefresh" class="button">刷新</button></div><article class="info-card"><div id="usageRateLimits"><div class="usage-rate-row"><div><strong>—</strong><span>—</span></div></div></div></article></section>
   </section>
   <section id="settingsPanel" class="section settings-panel" hidden>
-    <div class="section-title"><div><h2>插件设置</h2><p>在当前插件页内直接管理 Codex App Server、模型选择和安全策略。</p></div><span class="pill ok">本地设置页</span></div>
+    <div class="section-title"><div><h2>插件设置</h2><p>在当前插件页内直接管理 Codex 后端、模型选择和安全策略。</p></div><span class="pill ok">本地设置页</span></div>
     <div class="settings-card">
       <form id="embeddedSettingsForm"><div class="settings-grid">
         <div class="setting setting-wide"><label for="embedded_codex_path">Codex 可执行文件</label><input id="embedded_codex_path" data-embedded-setting="codex_path" type="text" autocomplete="off"><small>命令名或绝对路径，例如 codex。</small></div>
-        <div class="setting"><label for="embedded_backend_mode">推理后端</label><select id="embedded_backend_mode" data-embedded-setting="backend_mode"><option value="app_server">App Server（默认）</option><option value="transport">Responses Transport（实验）</option><option value="auto">自动回退</option></select><small>Transport 不创建 Codex thread/turn；auto 在鉴权、模型、协议或限流错误时回退 App Server。</small></div>
+        <div class="setting"><label for="embedded_backend_mode">推理后端</label><select id="embedded_backend_mode" data-embedded-setting="backend_mode"><option value="transport">Responses Transport（推荐）</option><option value="app_server">App Server（稳定回退）</option><option value="auto">自动回退</option></select><small>推荐使用 Transport：不创建 Codex thread/turn，适合 AstrBot 轻量聊天；App Server 是稳定兼容回退，auto 会在鉴权、模型、协议或限流错误时回退 App Server。</small></div>
         <div class="setting"><label for="embedded_transport_proxy">Transport 网络代理</label><input id="embedded_transport_proxy" data-embedded-setting="transport_proxy" type="text" autocomplete="off" placeholder="例如 http://127.0.0.1:7890"><small>可选。AstrBot 会清理系统代理；只有选择 Transport 且服务器需要代理访问外网时填写。</small></div>
         <div class="setting"><label for="embedded_login_mode">登录方式</label><select id="embedded_login_mode" data-embedded-setting="login_mode"><option value="browser">浏览器 OAuth（推荐）</option><option value="device_code">Device Code（无图形服务器）</option></select></div>
         <div class="setting"><label for="embedded_default_model">默认模型</label><input id="embedded_default_model" data-embedded-setting="default_model" type="text" autocomplete="off"><small>auto 使用服务端默认模型。</small></div>

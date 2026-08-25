@@ -37,6 +37,9 @@ class HarnessPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(params["config"], lightweight_config())
         self.assertNotIn("dynamicTools", params)
 
+    def test_transport_is_the_default_backend(self):
+        self.assertEqual(self.service.backend_mode, "transport")
+
     async def test_codex_mode_keeps_server_defaults(self):
         self.service.config["harness_mode"] = "codex"
         calls = []

@@ -12,6 +12,11 @@ historical development milestones, not separately published public tags.
 
 ### 中文
 
+- 将 Responses HTTP/SSE Transport 设为新配置的默认和推荐推理后端；保留
+  `app_server` 作为稳定兼容回退。
+- 更新 WebUI 后端选项顺序、默认提示和中英文文档，使推荐路径保持一致。
+- 改善缺少 Codex CLI 时的启动错误提示，明确 Transport 推理与首次 OAuth 登录的
+  依赖边界。
 - 增加中英文双语版本记录。
 - 增加 `README.zh-CN.md`，覆盖安装、配置、登录、Usage、安全、故障排查和
   Beta 限制。
@@ -20,6 +25,13 @@ historical development milestones, not separately published public tags.
 
 ### English
 
+- Made the Responses HTTP/SSE Transport the default and recommended backend for
+  new configurations, while keeping `app_server` as the stable compatibility
+  fallback.
+- Updated WebUI backend ordering, default labels, and bilingual documentation
+  so the recommendation is consistent across the plugin.
+- Improved the missing-Codex-CLI error to explain the dependency boundary between
+  Transport inference and the first official OAuth login.
 - Added bilingual release notes.
 - Added `README.zh-CN.md` covering installation, configuration, login, Usage,
   security, troubleshooting, and Beta limitations.

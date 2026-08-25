@@ -42,7 +42,12 @@ class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(temp_dir.cleanup)
         service = CodexService(
             Path(temp_dir.name),
-            {"turn_timeout": 30, "max_concurrent_turns": 2, "show_tool_status": False},
+            {
+                "backend_mode": "app_server",
+                "turn_timeout": 30,
+                "max_concurrent_turns": 2,
+                "show_tool_status": False,
+            },
         )
 
         async def fake_connect():

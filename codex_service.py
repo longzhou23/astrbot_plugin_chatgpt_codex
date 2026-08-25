@@ -38,6 +38,41 @@ from .usage.models import UsageSnapshot, parse_usage_snapshot_event
 from .usage.service import UsageService
 
 
+@contextlib.asynccontextmanager
+async def _async_timeout(seconds: float):
+    """Use asyncio.timeout when available, with a streaming-safe 3.10 fallback."""
+
+    timeout_factory = getattr(asyncio, "timeout", None)
+    if timeout_factory is not None:
+        async with timeout_factory(seconds):
+            yield
+        return
+
+    task = asyncio.current_task()
+    if task is None:
+        yield
+        return
+
+    loop = asyncio.get_running_loop()
+    timed_out = False
+
+    def cancel_task() -> None:
+        nonlocal timed_out
+        timed_out = True
+        task.cancel()
+
+    handle = loop.call_later(seconds, cancel_task)
+    try:
+        try:
+            yield
+        except asyncio.CancelledError:
+            if timed_out:
+                raise asyncio.TimeoutError from None
+            raise
+    finally:
+        handle.cancel()
+
+
 class CodexService:
     """Codex App Server lifecycle, auth, model catalog, and thread/turn orchestration."""
 
@@ -152,8 +187,8 @@ class CodexService:
 
     @property
     def backend_mode(self) -> str:
-        value = str(self.config.get("backend_mode", "app_server") or "app_server").lower()
-        return value if value in {"app_server", "transport", "auto"} else "app_server"
+        value = str(self.config.get("backend_mode", "transport") or "transport").lower()
+        return value if value in {"app_server", "transport", "auto"} else "transport"
 
     def set_harness_mode(self, mode: str) -> None:
         self.config["harness_mode"] = normalize_harness_mode(mode)
@@ -577,7 +612,7 @@ class CodexService:
 
         if backend not in {"app_server", "transport"}:
             raise ValueError("benchmark backend 只能是 app_server 或 transport")
-        previous = self.config.get("backend_mode", "app_server")
+        previous = self.config.get("backend_mode", "transport")
         self.config["backend_mode"] = backend
         session_key = f"__codex_benchmark__:{backend}:{uuid.uuid4().hex}"
         started = time.monotonic()
@@ -891,7 +926,7 @@ class CodexService:
             tool_calls: list[dict[str, Any]] = []
             usage: dict[str, Any] | None = None
             response_id: str | None = None
-            async with asyncio.timeout(timeout):
+            async with _async_timeout(timeout):
                 async for event in self.transport.stream_chat(
                     model=selected_model,
                     instructions=instructions,
