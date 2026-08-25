@@ -86,7 +86,7 @@ MVP 不执行 Transport 侧的多轮工具循环。
 
 ### `app_server`：稳定兼容回退
 
-插件启动 `codex app-server --stdio`，通过 Codex App Server 的 JSONL RPC
+插件启动 `codex app-server`，使用当前版本默认的 stdio 传输，通过 Codex App Server 的 JSONL RPC
 协议完成登录、模型发现、thread 管理和 turn 流式响应。需要稳定的 Codex
 Agent Loop 或 Transport 不可用时，可以在设置中显式选择此后端。
 
@@ -123,7 +123,8 @@ data/plugins/astrbot_plugin_chatgpt_codex
 2. 确认命令行可以执行 `codex`，或者在设置中填写绝对路径。Transport 推理本身
    不启动 App Server，但首次 ChatGPT OAuth / Device Code 登录仍通过官方
    `codex app-server` 登录 RPC 完成。
-3. `app_server` 推理需要支持 `codex app-server --stdio` 的版本。
+3. `app_server` 推理启动 `codex app-server`，使用当前版本默认的 stdio 传输。插件不再
+   传递旧版本的 `--stdio` 参数，避免当前 Codex CLI 因不认识该参数而立即退出。
 4. AstrBot 进程需要能够访问 Codex 登录和推理服务。
 5. 如果主机必须通过本地代理访问网络，请在插件设置中填写明确的
    `transport_proxy`，例如 `http://127.0.0.1:7890`。

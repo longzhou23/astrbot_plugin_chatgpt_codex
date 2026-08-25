@@ -13,7 +13,7 @@ from .codex_security import redact_text
 
 
 class CodexProcessManager:
-    """Own an isolated long-lived ``codex app-server --stdio`` process."""
+    """Own an isolated long-lived ``codex app-server`` stdio process."""
 
     def __init__(
         self,
@@ -86,7 +86,12 @@ class CodexProcessManager:
                         "model_providers.astrbot_chatgpt_http.supports_websockets=false",
                     ]
                 )
-            command.append("--stdio")
+            # Current Codex App Server uses stdio by default.  Older versions
+            # exposed a ``--stdio`` spelling, but recent CLI releases reject
+            # that flag and exit immediately, which surfaces to the RPC client
+            # as "app-server closed stdout".  Do not pass a transport flag;
+            # pipes supplied by create_subprocess_exec select the default stdio
+            # transport and remain compatible with the current protocol.
             env = os.environ.copy()
             env["CODEX_HOME"] = str(self.codex_home)
             try:

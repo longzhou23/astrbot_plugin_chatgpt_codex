@@ -19,6 +19,8 @@ historical development milestones, not separately published public tags.
   依赖边界。
 - 扩展中英文首次启动指引，增加官方 Codex CLI 安装入口、Windows/npm 与
   macOS/Linux 安装方式、`codex --version` 验证和 `codex_path` 排查步骤。
+- 修复当前 Codex CLI 拒绝旧版 `--stdio` 参数导致的 `app-server closed stdout`；
+  App Server 现在使用官方默认的 stdio 传输启动。
 - 在中英文 README 顶部增加新实例首次启动指引，说明 Codex CLI、OAuth 回调、
   `CODEX_HOME` 和 Transport 推理的依赖边界。
 - 增加中英文双语版本记录。
@@ -39,6 +41,9 @@ historical development milestones, not separately published public tags.
 - Expanded the bilingual first-start guide with the official Codex CLI setup link,
   Windows/npm and macOS/Linux install methods, `codex --version` verification, and
   `codex_path` troubleshooting.
+- Fixed current Codex CLI releases exiting on the legacy `--stdio` flag, which surfaced
+  as `app-server closed stdout`; App Server now uses the documented default stdio
+  transport.
 - Added a prominent first-start guide to both READMEs covering Codex CLI, OAuth
   callback handling, `CODEX_HOME`, and the Transport inference boundary.
 - Added bilingual release notes.
