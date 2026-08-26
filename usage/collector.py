@@ -36,4 +36,3 @@ class UsageCollector:
             usage=usage,
             timestamp=timestamp,
         )
-

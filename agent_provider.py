@@ -26,10 +26,34 @@ except ImportError:  # pragma: no cover
 
 _SERVICE: CodexService | None = None
 
+_SUPPORTED_MODALITIES = ("text", "image", "audio", "tool_use")
+
 
 def bind_service(service: CodexService) -> None:
     global _SERVICE
     _SERVICE = service
+
+
+def _ensure_supported_modalities(provider_config: dict[str, Any]) -> list[str]:
+    """Migrate provider records created by older beta releases.
+
+    AstrBot's Agent Runner removes every function tool before calling a provider
+    when its persisted ``modalities`` list does not contain ``tool_use``. Early
+    plugin builds saved text/image-only lists, so merely changing the provider
+    template does not repair an existing installation.
+    """
+
+    configured = provider_config.get("modalities")
+    values = (
+        [str(item) for item in configured if isinstance(item, str)]
+        if isinstance(configured, list)
+        else []
+    )
+    for modality in _SUPPORTED_MODALITIES:
+        if modality not in values:
+            values.append(modality)
+    provider_config["modalities"] = values
+    return values
 
 
 def _conversation_key(session_id: str | None) -> str:
@@ -252,13 +276,11 @@ if _ASTRBOT_AVAILABLE:
                 self.provider_config["max_context_tokens"] <= 0
             ):
                 self.provider_config["max_context_tokens"] = 1000000
-            modalities = self.provider_config.get("modalities")
-            if isinstance(modalities, list) and "audio" not in modalities:
-                # Older provider records omitted audio because the previous
-                # adapter downgraded it to a marker. The current Codex protocol
-                # has a first-class input_audio item, so keep AstrBot from
-                # sanitizing the attachment before it reaches this provider.
-                self.provider_config["modalities"] = [*modalities, "audio"]
+            # Updating the registration template is insufficient for provider
+            # records AstrBot has already persisted. In particular, an old list
+            # without ``tool_use`` makes Agent Runner silently clear func_tool,
+            # so star-map and every other AstrBot tool disappear for this model.
+            _ensure_supported_modalities(self.provider_config)
             self.model_name = str(provider_config.get("model", "auto") or "auto")
 
         @staticmethod

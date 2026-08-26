@@ -2,6 +2,7 @@ import unittest
 
 from ..agent_provider import (
     _conversation_key,
+    _ensure_supported_modalities,
     _has_non_text_content,
     _is_title_generation_request,
     _normalize_request_inputs,
@@ -15,6 +16,21 @@ async def event_stream(events):
 
 
 class AgentProviderContractTests(unittest.IsolatedAsyncioTestCase):
+    def test_old_provider_modalities_are_migrated_with_tool_use(self):
+        provider_config = {"modalities": ["text", "image"]}
+
+        modalities = _ensure_supported_modalities(provider_config)
+
+        self.assertEqual(modalities, ["text", "image", "audio", "tool_use"])
+        self.assertEqual(provider_config["modalities"], modalities)
+
+    def test_missing_provider_modalities_receive_all_supported_values(self):
+        provider_config = {}
+
+        modalities = _ensure_supported_modalities(provider_config)
+
+        self.assertEqual(modalities, ["text", "image", "audio", "tool_use"])
+
     def test_astrbot_internal_title_request_is_detected(self):
         self.assertTrue(
             _is_title_generation_request(

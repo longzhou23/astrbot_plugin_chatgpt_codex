@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ..codex_errors import CodexRPCError
 from ..codex_service import CodexService
+from ..transport.types import TransportError
 
 
 class FakeRpc:
@@ -51,7 +52,43 @@ class FakeTransport:
         }
 
 
+class BlankTransport:
+    async def stream_chat(self, **kwargs):
+        del kwargs
+        yield {
+            "kind": "final",
+            "text": "\n  \t",
+            "response_id": "resp-blank",
+            "usage": {
+                "input_tokens": 10,
+                "output_tokens": 3,
+                "total_tokens": 13,
+            },
+            "tool_calls": [],
+            "event_types": ["response.output_text.done", "response.completed"],
+        }
+
+
 class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_transport_rejects_whitespace_only_assistant_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = CodexService(
+                Path(directory),
+                {"backend_mode": "transport", "turn_timeout": 30},
+            )
+            service.transport = BlankTransport()
+            try:
+                with self.assertRaises(TransportError):
+                    async for _ in service.stream_turn(
+                        session_key="session-blank",
+                        prompt="hello",
+                        model="gpt-test",
+                        tools=[],
+                    ):
+                        pass
+            finally:
+                await service.close()
+
     async def _service(self, rpc):
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)

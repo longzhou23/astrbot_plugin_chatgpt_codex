@@ -1372,7 +1372,7 @@ class CodexService:
                             for item in event.get("event_types", [])
                             if isinstance(item, str)
                         ][:32]
-            if not final_text and not tool_calls:
+            if not final_text.strip() and not tool_calls:
                 tool_names = [
                     str(item.get("name"))
                     for item in tools or []
@@ -1384,7 +1384,7 @@ class CodexService:
                     len(tools or []),
                     ",".join(tool_names[:16]) or "none",
                 )
-                raise TransportError("Codex transport 返回空响应")
+                raise TransportError("Codex transport 返回空白响应")
             usage_diagnostic = None
             if usage:
                 try:
