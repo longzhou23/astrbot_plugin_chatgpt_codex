@@ -72,11 +72,37 @@ def _normalize_request_inputs(
     if plain and isinstance(plain[-1], dict) and plain[-1].get("role") == "user":
         content = plain[-1].get("content")
         candidate = CodexService._content_text(content).strip()
-        if not latest:
-            latest = candidate
-        if candidate and candidate == latest:
+        if _has_non_text_content(content):
+            # A multimodal current message must stay in contexts. Removing it
+            # here would discard its image/audio/reply/file/video parts before
+            # the Responses adapter can translate them. Avoid duplicating its
+            # text as a separate latest prompt as well.
+            if not latest or latest == candidate:
+                latest = None
+        else:
+            if not latest:
+                latest = candidate
+        if candidate and candidate == latest and not _has_non_text_content(content):
             plain.pop()
     return latest or None, plain
+
+
+def _has_non_text_content(content: Any) -> bool:
+    """Tell whether a provider message contains media or attachment parts."""
+
+    if isinstance(content, dict):
+        parts = [content]
+    elif isinstance(content, list):
+        parts = content
+    else:
+        return False
+    for part in parts:
+        value = part.model_dump() if hasattr(part, "model_dump") else part
+        if not isinstance(value, dict):
+            continue
+        if value.get("type") not in {"text", "input_text", "output_text"}:
+            return True
+    return False
 
 
 def _is_title_generation_request(
@@ -209,7 +235,7 @@ if _ASTRBOT_AVAILABLE:
             "model": "auto",
             "reasoning": True,
             "max_context_tokens": 1000000,
-            "modalities": ["text", "image", "tool_use"],
+            "modalities": ["text", "image", "audio", "tool_use"],
         },
         provider_display_name="ChatGPT Codex Subscription",
     )
@@ -220,17 +246,19 @@ if _ASTRBOT_AVAILABLE:
             # adapter actually forwards. Existing provider records created by
             # older beta builds may still contain reasoning=false, audio, or a
             # zero context window even though the Transport path now preserves
-            # reasoning signatures and only supports text/image/tool input.
+            # reasoning signatures and supports text/image/audio/tool input.
             self.provider_config["reasoning"] = True
             if not isinstance(self.provider_config.get("max_context_tokens"), int) or (
                 self.provider_config["max_context_tokens"] <= 0
             ):
                 self.provider_config["max_context_tokens"] = 1000000
             modalities = self.provider_config.get("modalities")
-            if isinstance(modalities, list) and "audio" in modalities:
-                self.provider_config["modalities"] = [
-                    modality for modality in modalities if modality != "audio"
-                ]
+            if isinstance(modalities, list) and "audio" not in modalities:
+                # Older provider records omitted audio because the previous
+                # adapter downgraded it to a marker. The current Codex protocol
+                # has a first-class input_audio item, so keep AstrBot from
+                # sanitizing the attachment before it reaches this provider.
+                self.provider_config["modalities"] = [*modalities, "audio"]
             self.model_name = str(provider_config.get("model", "auto") or "auto")
 
         @staticmethod

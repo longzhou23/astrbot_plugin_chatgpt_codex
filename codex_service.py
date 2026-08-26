@@ -37,7 +37,6 @@ from .transport.types import (
     TransportAuthError,
     TransportError,
     TransportModelError,
-    TransportProtocolError,
 )
 from .usage.models import UsageSnapshot, parse_usage_snapshot_event
 from .usage.service import UsageService
@@ -850,10 +849,19 @@ class CodexService:
     def _content_text(content: Any) -> str:
         if isinstance(content, str):
             return content
+        if isinstance(content, dict):
+            if content.get("type") in ("text", "input_text", "output_text"):
+                text = content.get("text")
+                return text if isinstance(text, str) else ""
+            return ""
         if isinstance(content, list):
             parts = []
             for item in content:
-                if isinstance(item, dict) and item.get("type") in ("text", "input_text"):
+                if isinstance(item, dict) and item.get("type") in (
+                    "text",
+                    "input_text",
+                    "output_text",
+                ):
                     text = item.get("text")
                     if isinstance(text, str):
                         parts.append(text)
@@ -865,12 +873,27 @@ class CodexService:
         lines: list[str] = []
         for message in contexts or []:
             if not isinstance(message, dict) or message.get("role") not in (
-                "system",
                 "user",
                 "assistant",
             ):
                 continue
             text = cls._content_text(message.get("content"))
+            try:
+                from .transport.responses import _attachment_marker
+
+                content = message.get("content")
+                parts = content if isinstance(content, list) else [content]
+                markers = [
+                    marker
+                    for part in parts
+                    if isinstance(part, dict)
+                    for marker in [_attachment_marker(part)]
+                    if marker
+                ]
+                if markers:
+                    text = "\n".join([text, *markers]).strip()
+            except ImportError:
+                pass
             if text:
                 lines.append(f"{message.get('role')}: {text}")
         return "\n".join(lines)[-120000:]
@@ -888,9 +911,95 @@ class CodexService:
             except Exception:
                 continue
             text = cls._content_text(value.get("text") if isinstance(value, dict) else value)
+            if isinstance(value, dict):
+                try:
+                    from .transport.responses import _attachment_marker
+
+                    marker = _attachment_marker(value)
+                except ImportError:
+                    marker = None
+                if marker:
+                    text = f"{text}\n{marker}".strip()
             if text:
                 result.append(text)
         return "\n".join(result)
+
+    @staticmethod
+    def _app_server_media_ref(value: Any) -> str | None:
+        """Extract a URL or local path for app-server media input items."""
+
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        if not isinstance(value, dict):
+            return None
+        for key in ("url", "image_url", "audio_url", "path"):
+            candidate = value.get(key)
+            if isinstance(candidate, dict):
+                candidate = candidate.get("url") or candidate.get("data")
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        return None
+
+    @classmethod
+    def _app_server_input_items(
+        cls,
+        user_text: str,
+        *,
+        image_urls: list[str] | None = None,
+        audio_urls: list[str] | None = None,
+        extra_user_content_parts: list[Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Build current app-server user input with the protocol's media variants."""
+
+        items: list[dict[str, Any]] = [{"type": "text", "text": user_text}]
+        unsupported: list[str] = []
+
+        def append_media(kind: str, value: Any) -> None:
+            ref = cls._app_server_media_ref(value)
+            if not ref:
+                return
+            if ref.startswith("data:"):
+                items.append({"type": kind, "url": ref})
+                return
+            try:
+                path = Path(ref)
+                if path.is_file():
+                    local_kind = "localImage" if kind == "image" else "localAudio"
+                    items.append({"type": local_kind, "path": str(path)})
+                    return
+            except (OSError, ValueError):
+                pass
+            unsupported.append(
+                "[图片附件无法以内联或本地文件方式转发]"
+                if kind == "image"
+                else "[音频附件无法以内联或本地文件方式转发]"
+            )
+
+        for image_url in image_urls or []:
+            append_media("image", image_url)
+        for audio_url in audio_urls or []:
+            append_media("audio", audio_url)
+        for raw_part in extra_user_content_parts or []:
+            part = raw_part
+            for method_name in ("model_dump_for_context", "model_dump"):
+                method = getattr(part, method_name, None)
+                if callable(method):
+                    try:
+                        part = method()
+                    except Exception:
+                        part = None
+                    break
+            if not isinstance(part, dict):
+                continue
+            part_type = part.get("type")
+            if part_type in {"input_image", "image", "image_url", "local_image", "localImage"}:
+                append_media("image", part.get("image_url") or part.get("url") or part.get("path"))
+            elif part_type in {"input_audio", "audio", "audio_url", "record", "voice"}:
+                append_media("audio", part.get("audio_url") or part.get("url") or part.get("path"))
+        if unsupported:
+            items.append({"type": "text", "text": "\n".join(unsupported)})
+        return items
 
     async def _thread_for(
         self,
@@ -1148,31 +1257,22 @@ class CodexService:
             from .transport.responses import build_input_items
 
             instructions = self._instructions_from_contexts(system_prompt, contexts)
-            record = await self.sessions.get(session_key)
+            # This endpoint deliberately sends ``store=false``. A
+            # ``previous_response_id`` is server-side response state and is not
+            # a valid substitute for replaying the AstrBot conversation here.
+            # The Codex transport rejects that id after the first request, which
+            # caused an avoidable failed request and made injected context look
+            # lost or duplicated. Keep AstrBot's context as the single source
+            # of truth and replay it every turn.
             previous_response_id = None
-            if (
-                record
-                and record.get("model") == selected_model
-                and isinstance(record.get("response_id"), str)
-                and record.get("response_id")
-            ):
-                previous_response_id = record["response_id"]
-            # Once a Responses response exists, its previous_response_id already
-            # carries the preceding input/output items. Replaying AstrBot's full
-            # text history in addition would duplicate the conversation. If no
-            # response state exists (first turn or a reset), send the full history.
-            continuation_contexts = (
-                self._transport_continuation_context(contexts, prompt)
-                if previous_response_id
-                else []
-            )
-            input_contexts = continuation_contexts if previous_response_id else contexts
+            continuation_contexts: list[dict[str, Any]] = []
+            input_contexts = contexts
             include_latest = bool(
                 prompt
                 or image_urls
                 or audio_urls
-                or not previous_response_id
-                or not continuation_contexts
+                or extra_user_content_parts
+                or not input_contexts
             )
             input_items = build_input_items(
                 input_contexts,
@@ -1197,7 +1297,14 @@ class CodexService:
                 "history_items": len(input_contexts or []),
                 "history_role_counts": context_role_counts,
                 "input_item_type_counts": input_type_counts,
+                "instructions_chars": len(instructions),
+                "instructions_fingerprint": (
+                    hashlib.sha256(instructions.encode("utf-8")).hexdigest()[:16]
+                    if instructions
+                    else None
+                ),
                 "dynamic_content_parts": len(extra_user_content_parts or []),
+                "dynamic_context_chars": len(self._extra_text(extra_user_content_parts)),
                 "image_inputs": len(image_urls or []),
                 "audio_inputs": len(audio_urls or []),
                 "tool_schema_bytes": len(
@@ -1214,6 +1321,7 @@ class CodexService:
             usage: dict[str, Any] | None = None
             response_id: str | None = None
             reasoning_signature: str | None = None
+            response_event_types: list[str] = []
             async def consume_transport_events(
                 request_items: list[dict[str, Any]],
                 request_previous_id: str | None,
@@ -1229,88 +1337,53 @@ class CodexService:
                 ):
                     yield event
 
-            for attempt in range(2):
-                try:
-                    async with _async_timeout(timeout):
-                        async for event in consume_transport_events(
-                            input_items, previous_response_id
-                        ):
-                            if event.get("kind") == "delta":
-                                if emit_deltas:
-                                    yield {
-                                        "kind": "delta",
-                                        "text": str(event.get("text", "")),
-                                    }
-                            elif event.get("kind") == "final":
-                                final_text = str(event.get("text", ""))
-                                tool_calls = (
-                                    event.get("tool_calls")
-                                    if isinstance(event.get("tool_calls"), list)
-                                    else []
-                                )
-                                usage = (
-                                    event.get("usage")
-                                    if isinstance(event.get("usage"), dict)
-                                    else None
-                                )
-                                response_id = (
-                                    event.get("response_id")
-                                    if isinstance(event.get("response_id"), str)
-                                    else None
-                                )
-                                reasoning_signature = (
-                                    event.get("reasoning_signature")
-                                    if isinstance(event.get("reasoning_signature"), str)
-                                    else None
-                                )
-                    break
-                except TransportProtocolError:
-                    if not previous_response_id or attempt:
-                        raise
-                    self.logger.info(
-                        "Transport previous response state rejected; replaying session context"
-                    )
-                    await self.sessions.reset(session_key)
-                    previous_response_id = None
-                    continuation_contexts = []
-                    input_items = build_input_items(
-                        contexts,
-                        prompt,
-                        extra_user_content_parts,
-                        image_urls=image_urls,
-                        audio_urls=audio_urls,
-                        tool_calls_result=tool_calls_result,
-                        include_latest=bool(
-                            prompt
-                            or image_urls
-                            or audio_urls
-                            or extra_user_content_parts
-                            or not contexts
-                        ),
-                    )
-                    input_type_counts = {}
-                    for item in input_items:
-                        item_type = (
-                            str(item.get("type", "unknown"))
-                            if isinstance(item, dict)
-                            else "unknown"
+            async with _async_timeout(timeout):
+                async for event in consume_transport_events(input_items, None):
+                    if event.get("kind") == "delta":
+                        if emit_deltas:
+                            yield {
+                                "kind": "delta",
+                                "text": str(event.get("text", "")),
+                            }
+                    elif event.get("kind") == "final":
+                        final_text = str(event.get("text", ""))
+                        tool_calls = (
+                            event.get("tool_calls")
+                            if isinstance(event.get("tool_calls"), list)
+                            else []
                         )
-                        input_type_counts[item_type] = input_type_counts.get(item_type, 0) + 1
-                    context_role_counts = {}
-                    for item in contexts or []:
-                        role = item.get("role") if isinstance(item, dict) else None
-                        role_name = str(role or "unknown")
-                        context_role_counts[role_name] = context_role_counts.get(role_name, 0) + 1
-                    context_diagnostics.update(
-                        {
-                            "history_items": len(contexts or []),
-                            "history_role_counts": context_role_counts,
-                            "input_item_type_counts": input_type_counts,
-                            "previous_response_id_used": False,
-                            "full_history_replayed": True,
-                        }
-                    )
+                        usage = (
+                            event.get("usage")
+                            if isinstance(event.get("usage"), dict)
+                            else None
+                        )
+                        response_id = (
+                            event.get("response_id")
+                            if isinstance(event.get("response_id"), str)
+                            else None
+                        )
+                        reasoning_signature = (
+                            event.get("reasoning_signature")
+                            if isinstance(event.get("reasoning_signature"), str)
+                            else None
+                        )
+                        response_event_types = [
+                            str(item)
+                            for item in event.get("event_types", [])
+                            if isinstance(item, str)
+                        ][:32]
             if not final_text and not tool_calls:
+                tool_names = [
+                    str(item.get("name"))
+                    for item in tools or []
+                    if isinstance(item, dict) and isinstance(item.get("name"), str)
+                ]
+                self.logger.warning(
+                    "Codex transport returned no visible text or tool call: events=%s tools=%d names=%s",
+                    ",".join(response_event_types[-12:]) or "none",
+                    len(tools or []),
+                    ",".join(tool_names[:16]) or "none",
+                )
                 raise TransportError("Codex transport 返回空响应")
             usage_diagnostic = None
             if usage:
@@ -1342,22 +1415,22 @@ class CodexService:
                 "usage_diagnostic": usage_diagnostic,
                 "thread_id": None,
                 "response_id": response_id,
+                "response_event_types": response_event_types,
                 "reasoning_signature": bool(reasoning_signature),
                 "previous_response_id": bool(previous_response_id),
                 "context_history_replayed": not bool(previous_response_id),
                 "continuation_items": len(continuation_contexts),
                 "context_diagnostics": context_diagnostics,
             }
-            if response_id:
-                await self.sessions.put(
-                    session_key,
-                    f"__transport__:{session_key}",
-                    bootstrapped=True,
-                    model=selected_model,
-                    prompt_version=self.prompt_version(instructions),
-                    response_id=response_id,
-                    increment_turn=True,
-                )
+            await self.sessions.put(
+                session_key,
+                f"__transport__:{session_key}",
+                bootstrapped=True,
+                model=selected_model,
+                prompt_version=self.prompt_version(instructions),
+                response_id=None,
+                increment_turn=True,
+            )
             if tool_calls:
                 yield {
                     "kind": "tool_call",
@@ -1385,7 +1458,7 @@ class CodexService:
         model: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        del image_urls, audio_urls, tool_calls_result, tools
+        del tool_calls_result, tools
         timeout = max(30.0, min(3600.0, float(self.config.get("turn_timeout", 600))))
         async with self._turn_slots, self.sessions.lock_for(session_key):
             await self.usage.initialize()
@@ -1403,7 +1476,34 @@ class CodexService:
             context_text = self._context_text(contexts)
             if context_text:
                 bootstrap += "<astrbot_context>\n" + context_text + "\n</astrbot_context>\n"
-            user_text = (prompt or "").strip() or "(The user sent an empty message.)"
+            current_parts: list[Any] = []
+            current_attachment_markers: list[str] = []
+            user_text = (prompt or "").strip()
+            if not user_text:
+                for message in reversed(contexts or []):
+                    if not isinstance(message, dict) or message.get("role") != "user":
+                        continue
+                    raw_content = message.get("content")
+                    current_parts = (
+                        raw_content if isinstance(raw_content, list) else [raw_content]
+                    )
+                    user_text = self._content_text(raw_content).strip()
+                    try:
+                        from .transport.responses import _attachment_marker
+
+                        for raw_part in current_parts:
+                            if isinstance(raw_part, dict):
+                                marker = _attachment_marker(raw_part)
+                                if marker:
+                                    current_attachment_markers.append(marker)
+                    except ImportError:
+                        pass
+                    break
+            if current_attachment_markers:
+                user_text = "\n".join(
+                    [user_text, *current_attachment_markers]
+                ).strip()
+            user_text = user_text or "(The user sent an empty message.)"
             extra_text = self._extra_text(extra_user_content_parts)
             if extra_text:
                 user_text += (
@@ -1482,7 +1582,15 @@ class CodexService:
                 params: dict[str, Any] = {
                     "threadId": thread_id,
                     "clientUserMessageId": str(uuid.uuid4()),
-                    "input": [{"type": "text", "text": user_text}],
+                    "input": self._app_server_input_items(
+                        user_text,
+                        image_urls=image_urls,
+                        audio_urls=audio_urls,
+                        extra_user_content_parts=[
+                            *current_parts,
+                            *(extra_user_content_parts or []),
+                        ],
+                    ),
                     "cwd": str(self.data_dir),
                     "approvalPolicy": "on-request",
                     "sandboxPolicy": {"type": "readOnly", "networkAccess": False},

@@ -1,16 +1,32 @@
 # Changelog / 更新日志
 
-本文件按仓库实际提交历史整理。当前只有 `v0.3.0-beta.1` 这一个正式 Git
-标签；`0.1.0` 和 `0.2.0` 是对应历史阶段的开发里程碑，并不是曾经单独
-发布过的公开标签。
+本文件按仓库实际提交历史整理。当前包含 `v0.3.0-beta.1` 和
+`v0.3.0-beta.2` 两个正式 Git 标签；`0.1.0` 和 `0.2.0` 是对应历史阶段的
+开发里程碑，并不是曾经单独发布过的公开标签。
 
 This changelog follows the repository's actual commit history. The repository
-currently has one formal Git tag, `v0.3.0-beta.1`; `0.1.0` and `0.2.0` are
-historical development milestones, not separately published public tags.
+now has two formal Git tags, `v0.3.0-beta.1` and `v0.3.0-beta.2`; `0.1.0` and
+`0.2.0` are historical development milestones, not separately published public
+tags.
 
-## Unreleased / 未发布
+## 0.3.0-beta.2 — 2026-08-26 / 第二个公开 Beta
 
 ### 中文
+
+- 完整适配 AstrBot 4.27 Provider/Agent Runner 的当前消息输入路径，避免带有
+  图片、音频、回复或附件的当前用户消息在规范化阶段被误删。
+- Transport 支持 Codex 原生 `input_image` 和 `input_audio` 内容项；App Server
+  支持官方的内联图片、内联音频、本地图片和本地音频 `turn/start` 输入项。
+- 回复、@成员、表情、位置、转发、JSON/XML、分享、联系人和音乐等消息会保留为
+  安全的可读文本标记；文件和视频会保留附件类型及文件名，不再静默丢失。
+- 工具返回值支持结构化文本、图片和音频内容，并继续由 AstrBot Agent Runner
+  执行工具，避免插件内部重复套 Agent Loop。
+- 补充 Responses SSE 的拒答文本、仅完整事件携带的最终文本、完整 output item、
+  function call 和 custom tool call 兼容处理；重复事件会去重，缺失 call_id 时
+  使用稳定的 output item id。
+- 保持隐藏 reasoning 不进入聊天输出，仅保存加密 reasoning 状态用于后续上下文恢复。
+- 增加多类型输入、完整输出事件、当前多模态消息保留和 App Server 媒体输入测试。
+- 更新中英文 README，明确 Codex 当前协议对文件和视频二进制输入的能力边界。
 
 - 将 Responses HTTP/SSE Transport 设为新配置的默认和推荐推理后端；保留
   `app_server` 作为稳定兼容回退。
@@ -30,6 +46,28 @@ historical development milestones, not separately published public tags.
 - 将首个 Beta 实现和配套文档同步到仓库默认 `main` 分支。
 
 ### English
+
+- Completed the current AstrBot 4.27 Provider/Agent Runner input adaptation so a
+  user message containing an image, audio, reply, or attachment is not removed
+  during request normalization.
+- Added Codex-native `input_image` and `input_audio` Transport items, plus the
+  official inline-image, inline-audio, local-image, and local-audio `turn/start`
+  variants for App Server mode.
+- Preserved replies, mentions, emojis, locations, forwarded messages, JSON/XML,
+  shares, contacts, and music as safe readable text markers. Files and videos
+  retain their attachment type and filename instead of being silently dropped.
+- Structured text, image, and audio tool results remain under AstrBot's Agent
+  Runner execution path; the plugin does not introduce a second Agent Loop.
+- Added Responses SSE compatibility for public refusal text, final text supplied
+  only by a completed event, complete output items, function calls, and custom
+  tool calls. Repeated events are deduplicated, with output item id as a stable
+  fallback when call_id is absent.
+- Kept hidden reasoning out of chat output while retaining encrypted reasoning
+  state for later context replay.
+- Added tests for mixed message inputs, completed output events, current
+  multimodal-message retention, and App Server media inputs.
+- Updated both READMEs to document the current Codex protocol boundary for file
+  and video binary input.
 
 - Made the Responses HTTP/SSE Transport the default and recommended backend for
   new configurations, while keeping `app_server` as the stable compatibility

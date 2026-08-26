@@ -9,7 +9,7 @@ from ..model_catalog import CodexModel
 from ..transport.client import CodexTransportClient
 from ..transport.models import parse_transport_models
 from ..transport.responses import build_input_items, parse_sse_data, response_request
-from ..transport.types import TransportResponse, TransportUsage
+from ..transport.types import TransportResponse, TransportToolCall, TransportUsage
 
 
 class TransportTests(unittest.TestCase):
@@ -57,6 +57,7 @@ class TransportTests(unittest.TestCase):
                 {"role": "user", "content": "old question"},
                 {"role": "assistant", "content": "old answer"},
                 {"role": "system", "content": "ignored here"},
+                {"role": "developer", "content": "instructions belong in instructions"},
             ],
             "latest",
         )
@@ -103,9 +104,71 @@ class TransportTests(unittest.TestCase):
             {"type": "input_image", "detail": "auto", "image_url": "https://example.invalid/current.png"},
             latest["content"],
         )
-        self.assertIn({"type": "input_text", "text": "[Audio]"}, latest["content"])
+        self.assertIn(
+            {"type": "input_audio", "audio_url": "https://example.invalid/current.wav"},
+            latest["content"],
+        )
         self.assertEqual(items[-2]["type"], "function_call")
         self.assertEqual(items[-1]["type"], "function_call_output")
+
+    def test_input_mapping_preserves_audio_and_attachment_markers(self):
+        items = build_input_items(
+            [],
+            "请看看这些附件",
+            extra_user_content_parts=[
+                self.FakeContentPart(
+                    {"type": "reply", "message_str": "上一条被引用的消息"}
+                ),
+                self.FakeContentPart({"type": "file", "name": "星图说明.pdf"}),
+                self.FakeContentPart({"type": "video", "name": "观测现场.mp4"}),
+                self.FakeContentPart(
+                    {"type": "input_audio", "audio_url": "data:audio/wav;base64,YQ=="}
+                ),
+            ],
+        )
+        content = items[-1]["content"]
+        self.assertIn(
+            {"type": "input_text", "text": "[引用消息]\n上一条被引用的消息"},
+            content,
+        )
+        self.assertIn({"type": "input_text", "text": "[文件附件：星图说明.pdf]"}, content)
+        self.assertIn({"type": "input_text", "text": "[视频附件：观测现场.mp4]"}, content)
+        self.assertIn(
+            {"type": "input_audio", "audio_url": "data:audio/wav;base64,YQ=="},
+            content,
+        )
+
+    def test_completed_output_message_and_refusal_are_visible_but_reasoning_is_not(self):
+        result = TransportResponse()
+        self.assertTrue(
+            parse_sse_data(
+                json.dumps(
+                    {
+                        "type": "response.completed",
+                        "response": {
+                            "id": "resp-message",
+                            "output": [
+                                {
+                                    "type": "message",
+                                    "content": [
+                                        {"type": "output_text", "text": "完成"},
+                                        {"type": "refusal", "text": "无法继续"},
+                                    ],
+                                },
+                                {
+                                    "type": "reasoning",
+                                    "id": "rs-private",
+                                    "encrypted_content": "secret",
+                                },
+                            ],
+                        },
+                    }
+                ),
+                result,
+            )
+        )
+        self.assertEqual(result.text, "完成无法继续")
+        self.assertNotIn("secret", result.text)
 
     def test_opaque_reasoning_is_replayed_without_plaintext(self):
         items = build_input_items(
@@ -184,6 +247,186 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(result.text, "hello")
         self.assertEqual(result.usage, TransportUsage(10, 3, 4, 1, 14, None))
 
+    def test_function_call_arguments_are_assembled_across_sse_events(self):
+        result = TransportResponse()
+        self.assertFalse(
+            parse_sse_data(
+                json.dumps(
+                    {
+                        "type": "response.output_item.added",
+                        "item": {
+                            "id": "fc-item-1",
+                            "type": "function_call",
+                            "call_id": "call-1",
+                            "name": "analyze_star_chart",
+                            "arguments": "",
+                        },
+                    }
+                ),
+                result,
+            )
+        )
+        for delta in ['{"birth":', '"2000-01-01"}']:
+            self.assertFalse(
+                parse_sse_data(
+                    json.dumps(
+                        {
+                            "type": "response.function_call_arguments.delta",
+                            "item_id": "fc-item-1",
+                            "delta": delta,
+                        }
+                    ),
+                    result,
+                )
+            )
+        self.assertFalse(
+            parse_sse_data(
+                json.dumps(
+                    {
+                        "type": "response.function_call_arguments.done",
+                        "item_id": "fc-item-1",
+                        "name": "analyze_star_chart",
+                        "arguments": '{"birth":"2000-01-01"}',
+                    }
+                ),
+                result,
+            )
+        )
+        # The final item and completed response may repeat the same call. The
+        # adapter must update it rather than return duplicate tool calls.
+        self.assertFalse(
+            parse_sse_data(
+                json.dumps(
+                    {
+                        "type": "response.output_item.done",
+                        "item": {
+                            "id": "fc-item-1",
+                            "type": "function_call",
+                            "call_id": "call-1",
+                            "name": "analyze_star_chart",
+                            "arguments": '{"birth":"2000-01-01"}',
+                        },
+                    }
+                ),
+                result,
+            )
+        )
+        self.assertTrue(
+            parse_sse_data(
+                json.dumps(
+                    {
+                        "type": "response.completed",
+                        "response": {
+                            "id": "resp-tool-1",
+                            "output": [
+                                {
+                                    "id": "fc-item-1",
+                                    "type": "function_call",
+                                    "call_id": "call-1",
+                                    "name": "analyze_star_chart",
+                                    "arguments": '{"birth":"2000-01-01"}',
+                                }
+                            ],
+                        },
+                    }
+                ),
+                result,
+            )
+        )
+        self.assertEqual(
+            result.tool_calls,
+            [
+                TransportToolCall(
+                    "call-1",
+                    "analyze_star_chart",
+                    '{"birth":"2000-01-01"}',
+                )
+            ],
+        )
+
+    def test_function_call_uses_item_id_when_call_id_is_missing(self):
+        result = TransportResponse()
+        self.assertTrue(
+            parse_sse_data(
+                json.dumps(
+                    {
+                        "type": "response.completed",
+                        "response": {
+                            "id": "resp-tool-fallback",
+                            "output": [
+                                {
+                                    "id": "fc-item-fallback",
+                                    "type": "function_call",
+                                    "name": "analyze_star_field",
+                                    "arguments": "{}",
+                                }
+                            ],
+                        },
+                    }
+                ),
+                result,
+            )
+        )
+        self.assertEqual(result.tool_calls[0].call_id, "fc-item-fallback")
+        self.assertEqual(result.event_types, ["response.completed"])
+
+    def test_custom_tool_call_events_are_adapted_for_astrbot_tool_loop(self):
+        result = TransportResponse()
+        events = [
+            {
+                "type": "response.output_item.added",
+                "item": {
+                    "id": "custom-item-1",
+                    "type": "custom_tool_call",
+                    "call_id": "custom-call-1",
+                    "name": "analyze_star_field",
+                    "input": "",
+                },
+            },
+            {
+                "type": "response.custom_tool_call_input.delta",
+                "item_id": "custom-item-1",
+                "delta": '{"image":',
+            },
+            {
+                "type": "response.custom_tool_call_input.done",
+                "item_id": "custom-item-1",
+                "input": '{"image":"current"}',
+            },
+            {
+                "type": "response.output_item.done",
+                "item": {
+                    "id": "custom-item-1",
+                    "type": "custom_tool_call",
+                    "call_id": "custom-call-1",
+                    "name": "analyze_star_field",
+                    "input": '{"image":"current"}',
+                },
+            },
+        ]
+        for event in events:
+            self.assertFalse(parse_sse_data(json.dumps(event), result))
+        self.assertEqual(
+            result.tool_calls,
+            [
+                TransportToolCall(
+                    "custom-call-1",
+                    "analyze_star_field",
+                    '{"image":"current"}',
+                )
+            ],
+        )
+
+    def test_output_text_done_is_used_when_no_text_delta_arrives(self):
+        result = TransportResponse()
+        self.assertFalse(
+            parse_sse_data(
+                json.dumps({"type": "response.output_text.done", "text": "answer"}),
+                result,
+            )
+        )
+        self.assertEqual(result.text, "answer")
+
     def test_response_request_can_continue_from_previous_response(self):
         payload = response_request(
             model="gpt-test",
@@ -202,6 +445,37 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(
             items,
             [{"type": "function_call_output", "call_id": "call-1", "output": "result"}],
+        )
+
+    def test_tool_history_without_prompt_does_not_create_synthetic_user_message(self):
+        items = build_input_items(
+            [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call-1",
+                            "function": {"name": "lookup", "arguments": "{}"},
+                        }
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "call-1", "content": "result"},
+            ],
+            None,
+            include_latest=True,
+        )
+        self.assertEqual(
+            items,
+            [
+                {
+                    "type": "function_call",
+                    "call_id": "call-1",
+                    "name": "lookup",
+                    "arguments": "{}",
+                },
+                {"type": "function_call_output", "call_id": "call-1", "output": "result"},
+            ],
         )
 
     def test_auth_file_is_not_needed_for_request_serialization(self):

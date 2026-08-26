@@ -3,6 +3,6 @@ display_name: ChatGPT Codex Subscription
 desc: Use ChatGPT-account Codex models in AstrBot through the official Codex App Server.
 description: Use ChatGPT-account Codex models in AstrBot through the official Codex App Server.
 author: Codex Community
-version: 0.3.0-beta.1
+version: 0.3.0-beta.2
 repo: https://github.com/longzhou23/astrbot_plugin_chatgpt_codex
 astrbot_version: ">=4.13.0"

@@ -179,6 +179,38 @@ class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(instructions, "persona\n\nKeep the reply short.")
 
+    def test_app_server_history_excludes_instruction_roles(self):
+        context = CodexService._context_text(
+            [
+                {"role": "system", "content": "persona must not be in user history"},
+                {"role": "developer", "content": "developer instruction"},
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "answer"},
+            ]
+        )
+        self.assertEqual(context, "user: question\nassistant: answer")
+
+    def test_app_server_input_uses_inline_and_local_media_variants(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "chart.png"
+            image_path.write_bytes(b"not-a-real-image")
+            items = CodexService._app_server_input_items(
+                "分析附件",
+                image_urls=[str(image_path)],
+                audio_urls=["data:audio/wav;base64,YQ=="],
+            )
+        self.assertEqual(items[0], {"type": "text", "text": "分析附件"})
+        self.assertEqual(items[1], {"type": "localImage", "path": str(image_path)})
+        self.assertEqual(items[2], {"type": "audio", "url": "data:audio/wav;base64,YQ=="})
+
+    def test_app_server_does_not_send_unusable_remote_media_url(self):
+        items = CodexService._app_server_input_items(
+            "看图",
+            image_urls=["https://example.invalid/chart.png"],
+        )
+        self.assertNotIn("https://example.invalid/chart.png", str(items))
+        self.assertIn("图片附件无法以内联或本地文件方式转发", items[-1]["text"])
+
     async def test_transport_sends_persona_when_astrbot_embeds_it_in_contexts(self):
         with tempfile.TemporaryDirectory() as directory:
             service = CodexService(
@@ -202,7 +234,7 @@ class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 await service.close()
 
-    async def test_transport_persists_response_state_and_avoids_history_duplication(self):
+    async def test_transport_replays_local_context_without_server_response_state(self):
         with tempfile.TemporaryDirectory() as directory:
             service = CodexService(
                 Path(directory),
@@ -243,11 +275,11 @@ class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(second, [{"kind": "final", "text": "answer-2", "reasoning_signature": None}])
                 self.assertEqual(fake.calls[0]["previous_response_id"], None)
                 self.assertEqual(len(fake.calls[0]["input_items"]), 2)
-                self.assertEqual(fake.calls[1]["previous_response_id"], "resp-1")
-                self.assertEqual(len(fake.calls[1]["input_items"]), 1)
-                self.assertEqual(fake.calls[1]["input_items"][0]["content"][0]["text"], "third")
+                self.assertEqual(fake.calls[1]["previous_response_id"], None)
+                self.assertEqual(len(fake.calls[1]["input_items"]), 3)
+                self.assertEqual(fake.calls[1]["input_items"][-1]["content"][0]["text"], "third")
                 record = await service.sessions.get("session-transport")
-                self.assertEqual(record["response_id"], "resp-2")
+                self.assertIsNone(record["response_id"])
             finally:
                 await service.close()
 
@@ -285,10 +317,16 @@ class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
                     model="gpt-test",
                 ):
                     pass
-                self.assertEqual(fake.calls[1]["previous_response_id"], "resp-1")
+                self.assertEqual(fake.calls[1]["previous_response_id"], None)
                 self.assertEqual(
                     fake.calls[1]["input_items"],
                     [
+                        {
+                            "type": "function_call",
+                            "call_id": "call-1",
+                            "name": "lookup",
+                            "arguments": "{}",
+                        },
                         {
                             "type": "function_call_output",
                             "call_id": "call-1",

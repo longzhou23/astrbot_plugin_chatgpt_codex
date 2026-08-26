@@ -2,6 +2,7 @@ import unittest
 
 from ..agent_provider import (
     _conversation_key,
+    _has_non_text_content,
     _is_title_generation_request,
     _normalize_request_inputs,
     _stream_frames,
@@ -51,6 +52,34 @@ class AgentProviderContractTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(prompt, "hello")
         self.assertEqual(contexts, [])
+
+    def test_output_text_parts_are_read_when_extracting_latest_user_message(self):
+        prompt, contexts = _normalize_request_inputs(
+            None,
+            [{"role": "user", "content": [{"type": "output_text", "text": "hello"}]}],
+        )
+        self.assertEqual(prompt, "hello")
+        self.assertEqual(contexts, [])
+
+    def test_multimodal_current_message_is_not_removed_from_contexts(self):
+        prompt, contexts = _normalize_request_inputs(
+            None,
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "分析这张图"},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": "data:image/png;base64,x"},
+                        },
+                    ],
+                }
+            ],
+        )
+        self.assertIsNone(prompt)
+        self.assertEqual(len(contexts), 1)
+        self.assertTrue(_has_non_text_content(contexts[0]["content"]))
 
     def test_sessionless_turn_gets_a_unique_ephemeral_thread(self):
         first = _conversation_key(None)

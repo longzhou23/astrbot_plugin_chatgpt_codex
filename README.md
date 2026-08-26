@@ -4,9 +4,9 @@
 
 `astrbot_plugin_chatgpt_codex` lets AstrBot use models made available to the signed-in ChatGPT account through the open-source Codex transport implementation. The recommended default is the lightweight experimental `transport` backend, which sends direct Responses HTTP/SSE requests without creating Codex threads or turns; the stable `codex app-server` backend remains available as a compatibility fallback. It does not use ChatGPT web cookies, browser capture, or a fabricated OpenAI-compatible endpoint.
 
-## First beta release
+## Beta 2 release
 
-This repository is published as `v0.3.0-beta.1`, the first public beta of the
+This repository is published as `v0.3.0-beta.2`, the second public beta of the
 current implementation. The recommended default path is the lightweight
 `transport` backend. The stable `app_server` backend remains available as a
 compatibility fallback when the experimental Responses endpoint is unavailable.
@@ -276,7 +276,7 @@ The tests are protocol-level tests and do not require a Codex binary or a live C
 ## Known limitations and next steps
 
 - App Server mode still buffers Codex text until `item/completed`/`turn/completed` and then emits one authoritative answer. Transport mode parses Responses SSE deltas and emits them progressively, then emits one completed terminal response for AstrBot's Agent Runner without rendering the answer a second time.
-- AstrBot image/audio context is not yet converted to the App Server's inline/local input variants; text is the reliable MVP path.
+- App Server mode now forwards AstrBot image and audio inputs as the official inline or local `turn/start` variants. Direct Transport mode forwards Codex `input_image` and `input_audio` content items. AstrBot reply/quote metadata is kept as quoted text. The current Codex protocol has no generic file or video `ContentItem`, so those platform attachments are preserved as short, user-visible attachment markers instead of being silently dropped; a future file-capable protocol can replace this adapter without changing the provider boundary.
 - Transport mode forwards AstrBot function schemas and returns tool calls to AstrBot's Agent Runner; tool results, structured function-call history, image inputs, and opaque Responses reasoning state are preserved across the next request. The plugin still does not execute a second transport-side Agent Loop. App Server mode continues to keep the Codex loop isolated and does not receive AstrBot tools.
 - Codex executable availability, ChatGPT plan entitlements, regional access, quota behavior, and protocol details are external runtime dependencies. The model catalog and errors must be checked on the target machine.
 - Provider selection still uses AstrBot's Provider registry because that is the stable plugin integration point. Transport mode bypasses Codex Agent Harness; App Server mode retains it for compatibility.

@@ -105,3 +105,11 @@ class TransportResponse:
     reasoning_signature: str | None = None
     rate_limits: dict[str, Any] = field(default_factory=dict)
     event_count: int = 0
+    # Function-call arguments arrive over several SSE events. This is an
+    # internal accumulator and is never serialized into user-visible output.
+    function_call_state: dict[str, dict[str, str]] = field(
+        default_factory=dict,
+        repr=False,
+    )
+    # Sanitized protocol diagnostics only; event payloads are never retained.
+    event_types: list[str] = field(default_factory=list, repr=False)

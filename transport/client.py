@@ -243,6 +243,7 @@ class CodexTransportClient:
                 ],
                 "reasoning_signature": result.reasoning_signature,
                 "rate_limits": dict(self._rate_limits),
+                "event_types": list(result.event_types),
             }
         finally:
             response.close()

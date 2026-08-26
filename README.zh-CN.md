@@ -7,7 +7,7 @@ ChatGPT 账号实际开放的 Codex 模型。插件推荐默认使用轻量的�
 Responses HTTP/SSE Transport 后端；稳定的 `codex app-server` 作为兼容回退保留。
 
 插件不使用 ChatGPT 网页 Cookie、浏览器抓包、私有 BFF 接口，也不伪造
-OpenAI API。当前版本为第一个公开 Beta：`v0.3.0-beta.1`。
+OpenAI API。当前版本为第二个公开 Beta：`v0.3.0-beta.2`。
 
 ## 首次启动指引（新实例必读）
 
@@ -135,7 +135,7 @@ App Server。每次请求只进行一次回退；配额耗尽不会无限重试�
 ### 从 GitHub 安装 Beta
 
 ```bash
-git clone --branch v0.3.0-beta.1 --depth 1 \
+git clone --branch v0.3.0-beta.2 --depth 1 \
   https://github.com/longzhou23/astrbot_plugin_chatgpt_codex.git
 ```
 
@@ -145,7 +145,7 @@ git clone --branch v0.3.0-beta.1 --depth 1 \
 data/plugins/astrbot_plugin_chatgpt_codex
 ```
 
-也可以直接下载 [v0.3.0-beta.1 源码压缩包](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex/archive/refs/tags/v0.3.0-beta.1.zip)。
+也可以直接下载 [v0.3.0-beta.2 源码压缩包](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex/archive/refs/tags/v0.3.0-beta.2.zip)。
 
 安装后重启 AstrBot，并确认插件已经启用。
 
@@ -283,6 +283,7 @@ Usage 使用服务端响应中实际返回的 usage 字段，不根据上下文�
 - Transport 是默认的轻量路径；插件不会在 Transport 内部套第二个 Agent Loop。
 - App Server 是稳定兼容回退；插件不会在 App Server 外部再套一层重复的 Agent Loop。
 - Transport 会将 AstrBot 工具调用返回给 AstrBot，并保留工具结果、结构化 function call 历史、图片输入和 Responses opaque reasoning 状态供下一轮使用；插件本身不会再套第二个 Transport Agent Loop。
+- 图片和音频会按当前 Codex 协议转发为 `input_image` / `input_audio` 或 App Server 的内联/本地输入项。回复和引用会保留为引用文本。当前 Codex 协议没有通用文件或视频 `ContentItem`，因此文件和视频会保留为简短的附件标记，不会静默丢失；协议未来支持后可以直接扩展这一层适配。
 
 AstrBot 的 `Context.llm_generate()` 对插件后台调用不一定提供 `session_id`。这类调用会使用每次请求独立生成的一次性会话键，并在请求结束后清理本地映射，绝不会与正常聊天或其他插件共享 Codex thread。
 
