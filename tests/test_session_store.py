@@ -16,9 +16,11 @@ class SessionStoreTests(unittest.IsolatedAsyncioTestCase):
                 bootstrapped=False,
                 model="gpt-a",
                 prompt_version="pv1",
+                response_id="resp-1",
             )
             self.assertEqual((await store.get("s1"))["thread_id"], "thr_1")
             self.assertEqual((await store.get("s1"))["prompt_version"], "pv1")
+            self.assertEqual((await store.get("s1"))["response_id"], "resp-1")
             await store.put(
                 "s1",
                 "thr_1",
@@ -28,6 +30,7 @@ class SessionStoreTests(unittest.IsolatedAsyncioTestCase):
                 increment_turn=True,
             )
             self.assertEqual((await store.get("s1"))["turn_count"], 1)
+            self.assertIsNone((await store.get("s1"))["response_id"])
             self.assertIs(store.lock_for("s1"), store.lock_for("s1"))
             self.assertTrue(await store.reset("s1"))
             self.assertFalse(await store.reset("s1"))

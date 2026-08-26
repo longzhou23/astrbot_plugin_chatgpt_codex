@@ -102,5 +102,6 @@ class TransportResponse:
     response_id: str | None = None
     usage: TransportUsage | None = None
     tool_calls: list[TransportToolCall] = field(default_factory=list)
+    reasoning_signature: str | None = None
     rate_limits: dict[str, Any] = field(default_factory=dict)
     event_count: int = 0

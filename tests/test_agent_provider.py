@@ -52,9 +52,12 @@ class AgentProviderContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(prompt, "hello")
         self.assertEqual(contexts, [])
 
-    def test_sessionless_turn_is_rejected_to_prevent_shared_thread(self):
-        with self.assertRaises(RuntimeError):
-            _conversation_key(None)
+    def test_sessionless_turn_gets_a_unique_ephemeral_thread(self):
+        first = _conversation_key(None)
+        second = _conversation_key(None)
+        self.assertTrue(first.startswith("__astrbot_ephemeral__:"))
+        self.assertTrue(second.startswith("__astrbot_ephemeral__:"))
+        self.assertNotEqual(first, second)
         self.assertEqual(_conversation_key("  group:1  "), "group:1")
 
     async def test_stream_always_ends_with_non_chunk_terminal_response(self):

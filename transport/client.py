@@ -39,12 +39,14 @@ class CodexTransportClient:
         timeout: float = 600,
         client_version: str = "0.146.0",
         proxy_url: str = "",
+        use_system_proxy: bool = True,
     ) -> None:
         self.auth = CodexAuthStore(codex_home)
         self.base_url = base_url.rstrip("/")
         self.timeout = max(30.0, float(timeout))
         self.client_version = client_version
         self.proxy_url = ""
+        self.use_system_proxy = bool(use_system_proxy)
         self._opener = None
         self.set_proxy(proxy_url)
         self._rate_limits: dict[str, Any] = {}
@@ -79,9 +81,14 @@ class CodexTransportClient:
             else None
         )
 
+    def set_use_system_proxy(self, enabled: bool) -> None:
+        self.use_system_proxy = bool(enabled)
+
     def _open(self, request: Request, *, timeout: float) -> Any:
         if self._opener is not None:
             return self._opener.open(request, timeout=timeout)
+        if not self.use_system_proxy:
+            return build_opener(ProxyHandler({})).open(request, timeout=timeout)
         return urlopen(request, timeout=timeout)
 
     async def get_account(self) -> dict[str, Any]:
@@ -162,6 +169,7 @@ class CodexTransportClient:
         effort: str = "auto",
         tools: list[dict[str, Any]] | None = None,
         prompt_cache_key: str | None = None,
+        previous_response_id: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         snapshot = await self.auth.snapshot()
         payload = response_request(
@@ -171,6 +179,7 @@ class CodexTransportClient:
             effort=effort,
             tools=tools,
             prompt_cache_key=prompt_cache_key,
+            previous_response_id=previous_response_id,
         )
         request = Request(
             self.base_url + "/responses",
@@ -232,6 +241,7 @@ class CodexTransportClient:
                     {"call_id": call.call_id, "name": call.name, "arguments": call.arguments}
                     for call in result.tool_calls
                 ],
+                "reasoning_signature": result.reasoning_signature,
                 "rate_limits": dict(self._rate_limits),
             }
         finally:

@@ -33,7 +33,12 @@ from .process_manager import CodexProcessManager
 from .session_store import SessionStore
 from .tool_bridge import ToolBridge
 from .transport import CodexTransportClient
-from .transport.types import TransportAuthError, TransportError, TransportModelError
+from .transport.types import (
+    TransportAuthError,
+    TransportError,
+    TransportModelError,
+    TransportProtocolError,
+)
 from .usage.models import UsageSnapshot, parse_usage_snapshot_event
 from .usage.service import UsageService
 
@@ -88,12 +93,15 @@ class CodexService:
             self.codex_home,
             timeout=float(config.get("turn_timeout", 600) or 600),
             proxy_url=str(config.get("transport_proxy", "") or ""),
+            use_system_proxy=bool(config.get("use_system_proxy", True)),
         )
         self.manager = CodexProcessManager(
             str(config.get("codex_path", "codex")),
             self.codex_home,
             logger=self.logger,
             force_http_transport=bool(config.get("force_http_transport", True)),
+            proxy_url=str(config.get("transport_proxy", "") or ""),
+            use_system_proxy=bool(config.get("use_system_proxy", True)),
         )
         self.catalog = ModelCatalog(self.data_dir / "models.json")
         self.sessions = SessionStore(self.data_dir / "sessions.sqlite3")
@@ -110,6 +118,7 @@ class CodexService:
             max(1, min(32, int(config.get("max_concurrent_turns", 2))))
         )
         self._account: dict[str, Any] | None = None
+        self._last_login_error: str | None = None
         self._rate_limits: dict[str, Any] | None = None
         self._login_events: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self._active_threads: dict[str, str] = {}
@@ -151,9 +160,11 @@ class CodexService:
             if isinstance(state, dict):
                 self._default_model = str(state.get("model", self._default_model) or "auto")
                 self._effort = str(state.get("effort", self._effort) or "auto")
-                # Existing installations predating the onboarding flag have
-                # already completed the initial configuration flow.
-                self._setup_completed = bool(state.get("setupCompleted", True))
+                # A state file predating onboarding must not silently suppress
+                # the first-run guide.  Authenticated accounts mark setup as
+                # complete during account/read, so existing working installs
+                # still settle on the completed state automatically.
+                self._setup_completed = bool(state.get("setupCompleted", False))
         except (OSError, ValueError, TypeError):
             return
 
@@ -239,11 +250,16 @@ class CodexService:
             await self._login_events.put({"kind": "account", **account})
         elif method == "account/login/completed":
             self._browser_callback_port = None
+            self._last_login_error = (
+                self._login_error_message(params.get("error"))
+                if not bool(params.get("success")) and params.get("error")
+                else None
+            )
             await self._login_events.put(
                 {
                     "kind": "login",
                     "success": bool(params.get("success")),
-                    "error": safe_error(params.get("error")) if params.get("error") else None,
+                    "error": self._last_login_error,
                 }
             )
         elif method == "account/rateLimits/updated":
@@ -402,7 +418,17 @@ class CodexService:
 
     async def login_start(self, mode: str) -> dict[str, Any]:
         login_type = "chatgptDeviceCode" if mode == "device_code" else "chatgpt"
-        result = await self._request("account/login/start", {"type": login_type}, timeout=30)
+        self._last_login_error = None
+        try:
+            result = await self._request(
+                "account/login/start", {"type": login_type}, timeout=30
+            )
+        except CodexRPCError as exc:
+            message = self._login_error_message(exc)
+            self._last_login_error = message
+            if message != str(exc):
+                raise CodexPluginError(message) from exc
+            raise
         if not isinstance(result, dict):
             return {}
         self._browser_callback_port = None
@@ -416,6 +442,52 @@ class CodexService:
             response["callbackRequired"] = True
             response["callbackPath"] = "/auth/callback"
         return response
+
+    @staticmethod
+    def _login_error_message(error: Any) -> str:
+        message = safe_error(error)
+        lowered = message.lower()
+        if "country, region, or territory not supported" in lowered or (
+            "403 forbidden" in lowered and ("device code" in lowered or "token" in lowered)
+        ):
+            return (
+                "Codex 登录请求被服务器出口网络的区域限制拒绝（HTTP 403）。"
+                "请在插件设置或欢迎页填写“网络代理（推理与登录）”后重试；"
+                "Docker 中必须填写容器能够访问的代理地址，不能使用宿主机的 127.0.0.1。"
+            )
+        if "failed to request device code" in lowered or "sending request for url" in lowered:
+            return (
+                "无法通过当前网络访问 ChatGPT Device Code 服务。"
+                "请检查插件中的显式网络代理是否真实运行并允许 Docker 容器访问；"
+                "如果使用系统代理，请确认 HTTP_PROXY、HTTPS_PROXY 或 ALL_PROXY 已传入 AstrBot 容器。"
+            )
+        return message
+
+    async def set_network_proxy(
+        self, proxy_url: str | None, *, use_system_proxy: bool | None = None
+    ) -> None:
+        """Apply one validated proxy to inference and future login processes."""
+
+        proxy = str(proxy_url or "").strip()
+        previous = self.manager.proxy_url
+        previous_system = self.manager.use_system_proxy
+        system_proxy = previous_system if use_system_proxy is None else bool(use_system_proxy)
+        self.transport.set_proxy(proxy)
+        self.transport.set_use_system_proxy(system_proxy)
+        self.manager.set_proxy(proxy)
+        self.manager.set_use_system_proxy(system_proxy)
+        if previous == self.manager.proxy_url and previous_system == system_proxy:
+            return
+        rpc = self._rpc
+        self._rpc = None
+        if rpc is not None:
+            with contextlib.suppress(Exception):
+                await rpc.close()
+        await self.manager.stop()
+        self._active_threads.clear()
+        self._thread_sessions.clear()
+        self._active_turns.clear()
+        self._turn_starting_threads.clear()
 
     @staticmethod
     def _callback_port_from_auth_url(auth_url: str) -> int | None:
@@ -555,6 +627,108 @@ class CodexService:
 
         return (value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
 
+    @classmethod
+    def _instructions_from_contexts(
+        cls,
+        system_prompt: str | None,
+        contexts: list[dict[str, Any]] | None,
+    ) -> str:
+        """Preserve AstrBot system/developer messages as Responses instructions.
+
+        The current AstrBot Agent Runner inserts ``ProviderRequest.system_prompt``
+        into ``contexts`` before invoking ``text_chat_stream``.  A provider must
+        therefore not rely on the optional argument alone: dropping these
+        messages silently removes the configured persona, formatting rules, and
+        plugin/tool guidance.  Keep the explicit argument first for direct SDK
+        calls, then append context-level instructions while removing exact
+        duplicates.
+        """
+
+        fragments: list[str] = []
+        seen: set[str] = set()
+
+        def add(value: Any) -> None:
+            text = cls._stable_system_prompt(value if isinstance(value, str) else None)
+            if text and text not in seen:
+                seen.add(text)
+                fragments.append(text)
+
+        add(system_prompt)
+        for item in contexts or []:
+            if not isinstance(item, dict) or item.get("role") not in {"system", "developer"}:
+                continue
+            content = item.get("content")
+            if isinstance(content, str):
+                add(content)
+                continue
+            if isinstance(content, list):
+                parts: list[str] = []
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") in {
+                        "text",
+                        "input_text",
+                        "output_text",
+                    }:
+                        text = part.get("text")
+                        if isinstance(text, str):
+                            parts.append(text)
+                add("".join(parts))
+        return "\n\n".join(fragments)
+
+    @staticmethod
+    def _transport_continuation_context(
+        contexts: list[dict[str, Any]] | None,
+        latest_prompt: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return only new Agent Runner items after the last function call.
+
+        AstrBot's tool loop appends the assistant function call and its tool
+        outputs to ``contexts`` before asking the provider for the next step.
+        With ``previous_response_id`` the function call is already part of the
+        previous Responses result, so only the suffix after that call belongs in
+        the new input.
+        """
+
+        normalized: list[dict[str, Any]] = []
+        for item in contexts or []:
+            if hasattr(item, "model_dump"):
+                try:
+                    item = item.model_dump()
+                except Exception:
+                    continue
+            if isinstance(item, dict):
+                normalized.append(item)
+        last_call_index = -1
+        last_tool_index = -1
+        for index, item in enumerate(normalized):
+            if item.get("role") == "assistant" and item.get("tool_calls"):
+                last_call_index = index
+            if item.get("role") == "tool":
+                last_tool_index = index
+        start = last_call_index + 1 if last_call_index >= 0 else last_tool_index
+        continuation = normalized[start:] if start >= 0 else []
+        latest = (latest_prompt or "").strip()
+        if latest and continuation:
+            last = continuation[-1]
+            if last.get("role") == "user" and CodexService._content_text(last.get("content")) == latest:
+                content = last.get("content")
+                if isinstance(content, list):
+                    remaining = [
+                        part
+                        for part in content
+                        if not (
+                            isinstance(part, dict)
+                            and part.get("type") in {"text", "input_text", "output_text"}
+                        )
+                    ]
+                    if remaining:
+                        continuation[-1] = {**last, "content": remaining}
+                    else:
+                        continuation.pop()
+                else:
+                    continuation.pop()
+        return continuation
+
     def _tool_schema_json(self) -> str:
         tools = []
         if (
@@ -602,6 +776,7 @@ class CodexService:
             "setup_completed": self.setup_completed,
             "auth_required": bool(auth_error),
             "auth_error": auth_error,
+            "login_error": self._last_login_error,
             "login_mode": str(self.config.get("login_mode", "browser") or "browser"),
             "codex": self.manager.diagnostic(),
             "account": account,
@@ -872,6 +1047,9 @@ class CodexService:
         contexts: list[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
         extra_user_content_parts: list[Any] | None = None,
+        image_urls: list[str] | None = None,
+        audio_urls: list[str] | None = None,
+        tool_calls_result: Any = None,
         model: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
@@ -884,6 +1062,9 @@ class CodexService:
                 contexts=contexts,
                 system_prompt=system_prompt,
                 extra_user_content_parts=extra_user_content_parts,
+                image_urls=image_urls,
+                audio_urls=audio_urls,
+                tool_calls_result=tool_calls_result,
                 model=model,
                 tools=tools,
             ):
@@ -896,6 +1077,9 @@ class CodexService:
                 contexts=contexts,
                 system_prompt=system_prompt,
                 extra_user_content_parts=extra_user_content_parts,
+                image_urls=image_urls,
+                audio_urls=audio_urls,
+                tool_calls_result=tool_calls_result,
                 model=model,
                 tools=tools,
                 emit_deltas=True,
@@ -909,6 +1093,9 @@ class CodexService:
                 contexts=contexts,
                 system_prompt=system_prompt,
                 extra_user_content_parts=extra_user_content_parts,
+                image_urls=image_urls,
+                audio_urls=audio_urls,
+                tool_calls_result=tool_calls_result,
                 model=model,
                 tools=tools,
                 emit_deltas=False,
@@ -924,6 +1111,9 @@ class CodexService:
                 contexts=contexts,
                 system_prompt=system_prompt,
                 extra_user_content_parts=extra_user_content_parts,
+                image_urls=image_urls,
+                audio_urls=audio_urls,
+                tool_calls_result=tool_calls_result,
                 model=model,
                 tools=tools,
             ):
@@ -937,6 +1127,9 @@ class CodexService:
         contexts: list[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
         extra_user_content_parts: list[Any] | None = None,
+        image_urls: list[str] | None = None,
+        audio_urls: list[str] | None = None,
+        tool_calls_result: Any = None,
         model: str | None = None,
         tools: list[dict[str, Any]] | None = None,
         emit_deltas: bool = True,
@@ -954,30 +1147,169 @@ class CodexService:
                 raise TransportModelError("没有可用于 transport 的模型")
             from .transport.responses import build_input_items
 
-            instructions = self._stable_system_prompt(system_prompt)
-            input_items = build_input_items(contexts, prompt, extra_user_content_parts)
+            instructions = self._instructions_from_contexts(system_prompt, contexts)
+            record = await self.sessions.get(session_key)
+            previous_response_id = None
+            if (
+                record
+                and record.get("model") == selected_model
+                and isinstance(record.get("response_id"), str)
+                and record.get("response_id")
+            ):
+                previous_response_id = record["response_id"]
+            # Once a Responses response exists, its previous_response_id already
+            # carries the preceding input/output items. Replaying AstrBot's full
+            # text history in addition would duplicate the conversation. If no
+            # response state exists (first turn or a reset), send the full history.
+            continuation_contexts = (
+                self._transport_continuation_context(contexts, prompt)
+                if previous_response_id
+                else []
+            )
+            input_contexts = continuation_contexts if previous_response_id else contexts
+            include_latest = bool(
+                prompt
+                or image_urls
+                or audio_urls
+                or not previous_response_id
+                or not continuation_contexts
+            )
+            input_items = build_input_items(
+                input_contexts,
+                prompt,
+                extra_user_content_parts,
+                image_urls=image_urls,
+                audio_urls=audio_urls,
+                tool_calls_result=tool_calls_result,
+                include_latest=include_latest,
+            )
+            input_type_counts: dict[str, int] = {}
+            for item in input_items:
+                item_type = str(item.get("type", "unknown")) if isinstance(item, dict) else "unknown"
+                input_type_counts[item_type] = input_type_counts.get(item_type, 0) + 1
+            context_role_counts: dict[str, int] = {}
+            for item in input_contexts or []:
+                role = item.get("role") if isinstance(item, dict) else None
+                role_name = str(role or "unknown")
+                context_role_counts[role_name] = context_role_counts.get(role_name, 0) + 1
+            context_diagnostics = {
+                "backend": "transport",
+                "history_items": len(input_contexts or []),
+                "history_role_counts": context_role_counts,
+                "input_item_type_counts": input_type_counts,
+                "dynamic_content_parts": len(extra_user_content_parts or []),
+                "image_inputs": len(image_urls or []),
+                "audio_inputs": len(audio_urls or []),
+                "tool_schema_bytes": len(
+                    json.dumps(tools or [], ensure_ascii=False, separators=(",", ":")).encode(
+                        "utf-8"
+                    )
+                ),
+                "previous_response_id_used": bool(previous_response_id),
+                "full_history_replayed": not bool(previous_response_id),
+            }
             started = time.monotonic()
             final_text = ""
             tool_calls: list[dict[str, Any]] = []
             usage: dict[str, Any] | None = None
             response_id: str | None = None
-            async with _async_timeout(timeout):
+            reasoning_signature: str | None = None
+            async def consume_transport_events(
+                request_items: list[dict[str, Any]],
+                request_previous_id: str | None,
+            ) -> AsyncGenerator[dict[str, Any], None]:
                 async for event in self.transport.stream_chat(
                     model=selected_model,
                     instructions=instructions,
-                    input_items=input_items,
+                    input_items=request_items,
                     effort=self._effort,
                     tools=tools,
                     prompt_cache_key=hashlib.sha256(session_key.encode("utf-8")).hexdigest(),
+                    previous_response_id=request_previous_id,
                 ):
-                    if event.get("kind") == "delta":
-                        if emit_deltas:
-                            yield {"kind": "delta", "text": str(event.get("text", ""))}
-                    elif event.get("kind") == "final":
-                        final_text = str(event.get("text", ""))
-                        tool_calls = event.get("tool_calls") if isinstance(event.get("tool_calls"), list) else []
-                        usage = event.get("usage") if isinstance(event.get("usage"), dict) else None
-                        response_id = event.get("response_id") if isinstance(event.get("response_id"), str) else None
+                    yield event
+
+            for attempt in range(2):
+                try:
+                    async with _async_timeout(timeout):
+                        async for event in consume_transport_events(
+                            input_items, previous_response_id
+                        ):
+                            if event.get("kind") == "delta":
+                                if emit_deltas:
+                                    yield {
+                                        "kind": "delta",
+                                        "text": str(event.get("text", "")),
+                                    }
+                            elif event.get("kind") == "final":
+                                final_text = str(event.get("text", ""))
+                                tool_calls = (
+                                    event.get("tool_calls")
+                                    if isinstance(event.get("tool_calls"), list)
+                                    else []
+                                )
+                                usage = (
+                                    event.get("usage")
+                                    if isinstance(event.get("usage"), dict)
+                                    else None
+                                )
+                                response_id = (
+                                    event.get("response_id")
+                                    if isinstance(event.get("response_id"), str)
+                                    else None
+                                )
+                                reasoning_signature = (
+                                    event.get("reasoning_signature")
+                                    if isinstance(event.get("reasoning_signature"), str)
+                                    else None
+                                )
+                    break
+                except TransportProtocolError:
+                    if not previous_response_id or attempt:
+                        raise
+                    self.logger.info(
+                        "Transport previous response state rejected; replaying session context"
+                    )
+                    await self.sessions.reset(session_key)
+                    previous_response_id = None
+                    continuation_contexts = []
+                    input_items = build_input_items(
+                        contexts,
+                        prompt,
+                        extra_user_content_parts,
+                        image_urls=image_urls,
+                        audio_urls=audio_urls,
+                        tool_calls_result=tool_calls_result,
+                        include_latest=bool(
+                            prompt
+                            or image_urls
+                            or audio_urls
+                            or extra_user_content_parts
+                            or not contexts
+                        ),
+                    )
+                    input_type_counts = {}
+                    for item in input_items:
+                        item_type = (
+                            str(item.get("type", "unknown"))
+                            if isinstance(item, dict)
+                            else "unknown"
+                        )
+                        input_type_counts[item_type] = input_type_counts.get(item_type, 0) + 1
+                    context_role_counts = {}
+                    for item in contexts or []:
+                        role = item.get("role") if isinstance(item, dict) else None
+                        role_name = str(role or "unknown")
+                        context_role_counts[role_name] = context_role_counts.get(role_name, 0) + 1
+                    context_diagnostics.update(
+                        {
+                            "history_items": len(contexts or []),
+                            "history_role_counts": context_role_counts,
+                            "input_item_type_counts": input_type_counts,
+                            "previous_response_id_used": False,
+                            "full_history_replayed": True,
+                        }
+                    )
             if not final_text and not tool_calls:
                 raise TransportError("Codex transport 返回空响应")
             usage_diagnostic = None
@@ -1010,11 +1342,34 @@ class CodexService:
                 "usage_diagnostic": usage_diagnostic,
                 "thread_id": None,
                 "response_id": response_id,
+                "reasoning_signature": bool(reasoning_signature),
+                "previous_response_id": bool(previous_response_id),
+                "context_history_replayed": not bool(previous_response_id),
+                "continuation_items": len(continuation_contexts),
+                "context_diagnostics": context_diagnostics,
             }
+            if response_id:
+                await self.sessions.put(
+                    session_key,
+                    f"__transport__:{session_key}",
+                    bootstrapped=True,
+                    model=selected_model,
+                    prompt_version=self.prompt_version(instructions),
+                    response_id=response_id,
+                    increment_turn=True,
+                )
             if tool_calls:
-                yield {"kind": "tool_call", "tool_calls": tool_calls}
+                yield {
+                    "kind": "tool_call",
+                    "tool_calls": tool_calls,
+                    "reasoning_signature": reasoning_signature,
+                }
             else:
-                yield {"kind": "final", "text": final_text}
+                yield {
+                    "kind": "final",
+                    "text": final_text,
+                    "reasoning_signature": reasoning_signature,
+                }
 
     async def _stream_app_server_turn(
         self,
@@ -1024,10 +1379,13 @@ class CodexService:
         contexts: list[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
         extra_user_content_parts: list[Any] | None = None,
+        image_urls: list[str] | None = None,
+        audio_urls: list[str] | None = None,
+        tool_calls_result: Any = None,
         model: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        del tools
+        del image_urls, audio_urls, tool_calls_result, tools
         timeout = max(30.0, min(3600.0, float(self.config.get("turn_timeout", 600))))
         async with self._turn_slots, self.sessions.lock_for(session_key):
             await self.usage.initialize()
@@ -1036,7 +1394,10 @@ class CodexService:
                 cached = await self.list_models()
                 if cached:
                     selected_model = cached[0].id
-            developer_instructions = self._stable_system_prompt(system_prompt)[-40000:]
+            developer_instructions = self._instructions_from_contexts(
+                system_prompt,
+                contexts,
+            )[-40000:]
             prompt_version = self.prompt_version(developer_instructions)
             bootstrap = ""
             context_text = self._context_text(contexts)

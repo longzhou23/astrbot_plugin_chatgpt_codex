@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -31,14 +33,21 @@ def bind_service(service: CodexService) -> None:
 
 
 def _conversation_key(session_id: str | None) -> str:
-    """Use AstrBot's unified conversation id; never fall back to a global thread."""
+    """Resolve a conversation id without ever falling back to a shared thread.
+
+    AstrBot's ``Context.llm_generate`` helper does not provide a conversation
+    id for background/plugin-owned calls. Those calls still need to work, but
+    must not reuse a normal chat thread. Give each such invocation a unique
+    ephemeral key; callers that provide AstrBot's unified id retain the durable
+    conversation mapping.
+    """
 
     key = (session_id or "").strip()
-    if not key:
-        raise RuntimeError(
-            "AstrBot did not provide a conversation session id; refusing to share a Codex thread"
-        )
-    return key
+    return key or f"__astrbot_ephemeral__:{uuid.uuid4().hex}"
+
+
+def _is_ephemeral_session(session_id: str | None) -> bool:
+    return not bool((session_id or "").strip())
 
 
 def _normalize_request_inputs(
@@ -120,13 +129,20 @@ async def _stream_provider_responses(
 ) -> AsyncGenerator[LLMResponse, None]:
     """Keep transport deltas and hand function calls to AstrBot's Agent Runner."""
 
+    accumulated_text: list[str] = []
     final_text = ""
     emitted_text = False
+    reasoning_signature: str | None = None
+    saw_tool_call = False
     async for event in events:
         kind = event.get("kind")
+        candidate_signature = event.get("reasoning_signature")
+        if isinstance(candidate_signature, str):
+            reasoning_signature = candidate_signature
         if kind == "delta":
             text = str(event.get("text", ""))
             if text:
+                accumulated_text.append(text)
                 emitted_text = True
                 yield LLMResponse(role="assistant", completion_text=text, is_chunk=True)
         elif kind == "tool_call":
@@ -146,18 +162,36 @@ async def _stream_provider_responses(
                 names.append(call["name"])
                 ids.append(str(call.get("call_id", "")))
             if names:
+                saw_tool_call = True
                 yield LLMResponse(
                     role="assistant",
                     tools_call_args=args,
                     tools_call_name=names,
                     tools_call_ids=ids,
+                    reasoning_signature=reasoning_signature,
                     is_chunk=False,
                 )
         elif kind == "final":
             final_text = str(event.get("text", ""))
             if final_text and not emitted_text:
                 yield LLMResponse(role="assistant", completion_text=final_text, is_chunk=True)
-    yield LLMResponse(role="assistant", completion_text="", is_chunk=False)
+
+    # A tool-call response is already the terminal Agent Runner step. Emitting
+    # another empty assistant response here makes AstrBot report an empty
+    # assistant message and can cause duplicate/replayed turns.
+    if saw_tool_call:
+        return
+    # AstrBot 4.27 requires a non-chunk response to close the Agent Runner
+    # step. It must carry the completed text; an empty sentinel is interpreted
+    # as an empty assistant message and produces a warning (and can lose the
+    # response when no streaming delta reached the outer pipeline).
+    completed_text = final_text or "".join(accumulated_text)
+    yield LLMResponse(
+        role="assistant",
+        completion_text=completed_text,
+        reasoning_signature=reasoning_signature,
+        is_chunk=False,
+    )
 
 
 if _ASTRBOT_AVAILABLE:
@@ -173,12 +207,30 @@ if _ASTRBOT_AVAILABLE:
             "enable": False,
             "key": ["chatgpt-subscription"],
             "model": "auto",
+            "reasoning": True,
+            "max_context_tokens": 1000000,
+            "modalities": ["text", "image", "tool_use"],
         },
         provider_display_name="ChatGPT Codex Subscription",
     )
     class CodexProvider(Provider):
         def __init__(self, provider_config: dict, provider_settings: dict) -> None:
             super().__init__(provider_config, provider_settings)
+            # Keep AstrBot's Agent Runner metadata aligned with what this
+            # adapter actually forwards. Existing provider records created by
+            # older beta builds may still contain reasoning=false, audio, or a
+            # zero context window even though the Transport path now preserves
+            # reasoning signatures and only supports text/image/tool input.
+            self.provider_config["reasoning"] = True
+            if not isinstance(self.provider_config.get("max_context_tokens"), int) or (
+                self.provider_config["max_context_tokens"] <= 0
+            ):
+                self.provider_config["max_context_tokens"] = 1000000
+            modalities = self.provider_config.get("modalities")
+            if isinstance(modalities, list) and "audio" in modalities:
+                self.provider_config["modalities"] = [
+                    modality for modality in modalities if modality != "audio"
+                ]
             self.model_name = str(provider_config.get("model", "auto") or "auto")
 
         @staticmethod
@@ -224,19 +276,29 @@ if _ASTRBOT_AVAILABLE:
             extra_user_content_parts: list[ContentPart] | None = None,
             **kwargs: Any,
         ) -> LLMResponse:
-            del image_urls, audio_urls, tool_calls_result, kwargs
+            del kwargs
             if session_id is None and _is_title_generation_request(prompt, contexts, system_prompt):
                 return LLMResponse(role="assistant", completion_text="<None>")
+            session_key = _conversation_key(session_id)
+            ephemeral = _is_ephemeral_session(session_id)
             latest_prompt, historical_contexts = _normalize_request_inputs(prompt, contexts)
-            text = await self._service().run_turn(
-                session_key=_conversation_key(session_id),
-                prompt=latest_prompt,
-                contexts=historical_contexts,
-                system_prompt=system_prompt,
-                extra_user_content_parts=extra_user_content_parts,
-                model=model or self.model_name,
-                tools=openai_tools_to_responses(func_tool),
-            )
+            try:
+                text = await self._service().run_turn(
+                    session_key=session_key,
+                    prompt=latest_prompt,
+                    contexts=historical_contexts,
+                    system_prompt=system_prompt,
+                    extra_user_content_parts=extra_user_content_parts,
+                    image_urls=image_urls,
+                    audio_urls=audio_urls,
+                    tool_calls_result=tool_calls_result,
+                    model=model or self.model_name,
+                    tools=openai_tools_to_responses(func_tool),
+                )
+            finally:
+                if ephemeral:
+                    with contextlib.suppress(Exception):
+                        await self._service().reset_session(session_key)
             return LLMResponse(role="assistant", completion_text=text)
 
         async def text_chat_stream(
@@ -253,25 +315,35 @@ if _ASTRBOT_AVAILABLE:
             extra_user_content_parts: list[ContentPart] | None = None,
             **kwargs: Any,
         ) -> AsyncGenerator[LLMResponse, None]:
-            del image_urls, audio_urls, tool_calls_result, kwargs
+            del kwargs
             if session_id is None and _is_title_generation_request(prompt, contexts, system_prompt):
                 yield LLMResponse(role="assistant", completion_text="<None>", is_chunk=False)
                 return
+            session_key = _conversation_key(session_id)
+            ephemeral = _is_ephemeral_session(session_id)
             latest_prompt, historical_contexts = _normalize_request_inputs(prompt, contexts)
-            events = self._service().stream_turn(
-                session_key=_conversation_key(session_id),
-                prompt=latest_prompt,
-                contexts=historical_contexts,
-                system_prompt=system_prompt,
-                extra_user_content_parts=extra_user_content_parts,
-                model=model or self.model_name,
-                tools=openai_tools_to_responses(func_tool),
-            )
-            async for response in _stream_provider_responses(events):
-                # AstrBot's Agent Runner requires the final non-chunk response to
-                # transition the step to DONE. Tool calls are returned as structured
-                # fields so AstrBot, rather than Codex, executes the next loop step.
-                yield response
+            try:
+                events = self._service().stream_turn(
+                    session_key=session_key,
+                    prompt=latest_prompt,
+                    contexts=historical_contexts,
+                    system_prompt=system_prompt,
+                    extra_user_content_parts=extra_user_content_parts,
+                    image_urls=image_urls,
+                    audio_urls=audio_urls,
+                    tool_calls_result=tool_calls_result,
+                    model=model or self.model_name,
+                    tools=openai_tools_to_responses(func_tool),
+                )
+                async for response in _stream_provider_responses(events):
+                    # AstrBot's Agent Runner requires the final non-chunk response to
+                    # transition the step to DONE. Tool calls are returned as structured
+                    # fields so AstrBot, rather than Codex, executes the next loop step.
+                    yield response
+            finally:
+                if ephemeral:
+                    with contextlib.suppress(Exception):
+                        await self._service().reset_session(session_key)
 
 else:  # pragma: no cover
     CodexProvider = None  # type: ignore[assignment,misc]

@@ -12,8 +12,13 @@
   },
   "transport_proxy": {
     "type": "string",
-    "description": "Responses Transport 使用的 HTTPS 代理，例如 http://127.0.0.1:7890。AstrBot 启动时会清理系统代理，因此需要时请在这里显式填写；不要填写用户名或密码。",
+    "description": "推理与 ChatGPT OAuth / Device Code 登录共用的网络代理，例如 http://127.0.0.1:7890。Docker 中必须填写容器可访问的地址，不能使用宿主机的 127.0.0.1；不要填写用户名或密码。",
     "default": ""
+  },
+  "use_system_proxy": {
+    "type": "bool",
+    "description": "继承 AstrBot 进程的 HTTP_PROXY、HTTPS_PROXY、ALL_PROXY 系统代理；显式 transport_proxy 优先。Docker 需要在容器环境中设置这些变量。",
+    "default": true
   },
   "login_mode": {
     "type": "string",

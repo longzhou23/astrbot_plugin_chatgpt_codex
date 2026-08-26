@@ -33,6 +33,7 @@ CONFIG_DEFAULTS: dict[str, Any] = {
     "codex_path": "codex",
     "backend_mode": "transport",
     "transport_proxy": "",
+    "use_system_proxy": True,
     "login_mode": "browser",
     "default_model": "auto",
     "reasoning_effort": "auto",
@@ -346,6 +347,7 @@ class ChatgptCodexPlugin(Star):
             "force_http_transport",
             "enable_local_codex_tools",
             "usage_debug",
+            "use_system_proxy",
         }
         for key, value in payload.items():
             if key not in CONFIG_DEFAULTS:
@@ -422,9 +424,10 @@ class ChatgptCodexPlugin(Star):
                         self.service.manager.force_http_transport = bool(
                             self.config.get("force_http_transport", True)
                         )
-                        if "transport_proxy" in values:
-                            self.service.transport.set_proxy(
-                                str(self.config.get("transport_proxy", "") or "")
+                        if "transport_proxy" in values or "use_system_proxy" in values:
+                            await self.service.set_network_proxy(
+                                str(self.config.get("transport_proxy", "") or ""),
+                                use_system_proxy=bool(self.config.get("use_system_proxy", True)),
                             )
                         if (
                             "usage_timezone" in values

@@ -158,11 +158,13 @@ data/plugins/astrbot_plugin_chatgpt_codex
 3. `app_server` 推理启动 `codex app-server`，使用当前版本默认的 stdio 传输。插件不再
    传递旧版本的 `--stdio` 参数，避免当前 Codex CLI 因不认识该参数而立即退出。
 4. AstrBot 进程需要能够访问 Codex 登录和推理服务。
-5. 如果主机必须通过本地代理访问网络，请在插件设置中填写明确的
-   `transport_proxy`，例如 `http://127.0.0.1:7890`。
+5. 如果主机必须通过代理访问网络，默认会继承 AstrBot 进程的
+   `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 环境变量；也可以在插件设置中填写明确的
+   `transport_proxy`，例如 `http://127.0.0.1:7890`，它会覆盖系统代理。
 
-AstrBot 启动时可能会清理继承的系统代理变量，因此不要只依赖系统环境变量。
-代理地址中不要写入用户名或密码。
+OAuth token exchange、Device Code 申请、Responses Transport 和 App Server
+   都使用同一套代理规则。代理地址中不要写入用户名或密码。Docker 用户必须把代理
+   环境变量传入容器；容器内的 `127.0.0.1` 指向容器本身，不是宿主机。
 
 ## WebUI 使用方法
 
@@ -200,7 +202,8 @@ AstrBot 启动时可能会清理继承的系统代理变量，因此不要只依
 | --- | --- | --- |
 | `codex_path` | `codex` | Codex 可执行文件名或绝对路径 |
 | `backend_mode` | `transport` | `transport`（推荐）、`app_server`（稳定回退）或 `auto` |
-| `transport_proxy` | 空 | Transport 使用的 HTTPS/HTTP 代理 |
+| `transport_proxy` | 空 | 显式 HTTP/HTTPS 代理；优先级高于系统代理 |
+| `use_system_proxy` | `true` | 继承 AstrBot 进程的 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY |
 | `login_mode` | `browser` | 浏览器 OAuth 或 `device_code` |
 | `default_model` | `auto` | 服务端 `model/list` 返回的模型 ID |
 | `reasoning_effort` | `auto` | 服务端声明的推理强度 |
@@ -279,7 +282,9 @@ Usage 使用服务端响应中实际返回的 usage 字段，不根据上下文�
 - 人设、系统提示和上下文由 AstrBot 外层 Agent Runner 管理。
 - Transport 是默认的轻量路径；插件不会在 Transport 内部套第二个 Agent Loop。
 - App Server 是稳定兼容回退；插件不会在 App Server 外部再套一层重复的 Agent Loop。
-- Transport MVP 将工具调用返回给 AstrBot，不在插件内部执行第二个工具循环。
+- Transport 会将 AstrBot 工具调用返回给 AstrBot，并保留工具结果、结构化 function call 历史、图片输入和 Responses opaque reasoning 状态供下一轮使用；插件本身不会再套第二个 Transport Agent Loop。
+
+AstrBot 的 `Context.llm_generate()` 对插件后台调用不一定提供 `session_id`。这类调用会使用每次请求独立生成的一次性会话键，并在请求结束后清理本地映射，绝不会与正常聊天或其他插件共享 Codex thread。
 
 ## 常见问题
 
@@ -295,7 +300,8 @@ Usage 使用服务端响应中实际返回的 usage 字段，不根据上下文�
 
 ### Transport 连接失败或响应很慢
 
-如果 Transport 连接失败，先填写 `transport_proxy`（如网络必须通过代理），或将
+如果 Transport 或登录连接失败，先确认 `use_system_proxy` 已开启且 AstrBot 进程确实拥有
+`HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`，或者填写 `transport_proxy`（如网络必须通过代理），或将
 `backend_mode` 改为稳定的 `app_server`。Transport 是实验功能，网络、鉴权和
 服务端接口变化都可能导致失败。
 
@@ -326,7 +332,7 @@ git diff --check
 
 - 推荐使用 `transport`；`app_server` 是稳定兼容回退。
 - Codex 客户端或服务端接口变化可能影响 Transport。
-- 当前 Transport MVP 不负责执行多轮工具调用。
+- Transport 仍由 AstrBot Agent Runner 负责工具执行和循环，插件不会再创建第二个工具循环；但工具结果和结构化调用历史会完整交给下一次 Transport 请求。
 - 账号官方配额仍由 Codex 服务端决定，插件不能增加订阅额度。
 - ChatGPT Plus 不包含 OpenAI API 余额或 API Key。
 

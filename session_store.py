@@ -21,6 +21,7 @@ class SessionStore:
                 bootstrapped INTEGER NOT NULL DEFAULT 0,
                 model TEXT,
                 prompt_version TEXT,
+                response_id TEXT,
                 created_at REAL NOT NULL DEFAULT 0,
                 updated_at REAL NOT NULL,
                 turn_count INTEGER NOT NULL DEFAULT 0
@@ -29,6 +30,7 @@ class SessionStore:
         columns = {row[1] for row in self._db.execute("PRAGMA table_info(sessions)").fetchall()}
         for name, definition in (
             ("prompt_version", "TEXT"),
+            ("response_id", "TEXT"),
             ("created_at", "REAL NOT NULL DEFAULT 0"),
             ("turn_count", "INTEGER NOT NULL DEFAULT 0"),
         ):
@@ -47,7 +49,7 @@ class SessionStore:
     async def get(self, session_key: str) -> dict | None:
         async with self._db_lock:
             row = self._db.execute(
-                """SELECT thread_id, bootstrapped, model, prompt_version,
+                """SELECT thread_id, bootstrapped, model, prompt_version, response_id,
                    created_at, updated_at, turn_count
                    FROM sessions WHERE session_key=?""",
                 (session_key,),
@@ -59,9 +61,10 @@ class SessionStore:
             "bootstrapped": bool(row[1]),
             "model": row[2],
             "prompt_version": row[3],
-            "created_at": row[4],
-            "updated_at": row[5],
-            "turn_count": row[6],
+            "response_id": row[4],
+            "created_at": row[5],
+            "updated_at": row[6],
+            "turn_count": row[7],
         }
 
     async def put(
@@ -72,6 +75,7 @@ class SessionStore:
         bootstrapped: bool,
         model: str | None,
         prompt_version: str | None = None,
+        response_id: str | None = None,
         increment_turn: bool = False,
     ) -> None:
         now = time.time()
@@ -79,16 +83,19 @@ class SessionStore:
             self._db.execute(
                 """INSERT INTO sessions(
                        session_key, thread_id, bootstrapped, model, prompt_version,
-                       created_at, updated_at, turn_count
-                   ) VALUES(?,?,?,?,?,?,?,?)
+                       response_id, created_at, updated_at, turn_count
+                   ) VALUES(?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(session_key) DO UPDATE SET thread_id=excluded.thread_id,
-                   bootstrapped=excluded.bootstrapped, model=excluded.model, updated_at=excluded.updated_at""",
+                   bootstrapped=excluded.bootstrapped, model=excluded.model,
+                   prompt_version=excluded.prompt_version, response_id=excluded.response_id,
+                   updated_at=excluded.updated_at""",
                 (
                     session_key,
                     thread_id,
                     int(bootstrapped),
                     model,
                     prompt_version,
+                    response_id,
                     now,
                     now,
                     0,
