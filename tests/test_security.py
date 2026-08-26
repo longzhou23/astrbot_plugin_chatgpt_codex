@@ -20,3 +20,8 @@ class SecurityTests(unittest.TestCase):
         self.assertNotIn("secret-code", redacted)
         self.assertNotIn("secret-state", redacted)
         self.assertIn("code=<redacted>", redacted)
+
+    def test_redacts_inline_image_data(self):
+        redacted = safe_error("bad image data:image/png;base64,c2Vuc2l0aXZlLWltYWdl")
+        self.assertNotIn("c2Vuc2l0aXZl", redacted)
+        self.assertIn("<redacted-data-uri>", redacted)

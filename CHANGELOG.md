@@ -9,6 +9,23 @@ now has two formal Git tags, `v0.3.0-beta.1` and `v0.3.0-beta.2`; `0.1.0` and
 `0.2.0` are historical development milestones, not separately published public
 tags.
 
+## Unreleased / 未发布
+
+### 中文
+
+- 修复 Responses Transport 将 AstrBot 插件传入的容器本地图片路径直接作为
+  `input_image.image_url` 发送而导致 HTTP 400；受支持的本地图片现在会验证实际
+  格式并安全内联为 data URI。
+- HTTP 协议错误会保留服务端提供的有限错误原因，同时对内联图片内容进行脱敏。
+
+### English
+
+- Fixed HTTP 400 responses caused by forwarding container-local image paths from
+  AstrBot plugins as `input_image.image_url`; supported local images are now
+  signature-validated and safely inlined as data URIs.
+- HTTP protocol errors now preserve a bounded server-provided reason while
+  redacting inline image data.
+
 ## 0.3.0-beta.2 — 2026-08-26 / 第二个公开 Beta
 
 ### 中文

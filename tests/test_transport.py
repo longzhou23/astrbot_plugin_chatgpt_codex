@@ -111,6 +111,49 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(items[-2]["type"], "function_call")
         self.assertEqual(items[-1]["type"], "function_call_output")
 
+    def test_local_image_path_is_inlined_for_remote_responses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "sample.png"
+            image_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"test-image")
+
+            items = build_input_items([], "inspect", image_urls=[str(image_path)])
+
+        image = items[-1]["content"][1]
+        self.assertEqual(image["type"], "input_image")
+        self.assertTrue(image["image_url"].startswith("data:image/png;base64,"))
+        self.assertNotIn(str(image_path), image["image_url"])
+
+    def test_file_url_image_is_inlined(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "sample.jpg"
+            image_path.write_bytes(b"\xff\xd8\xff" + b"test-image")
+
+            items = build_input_items([], "inspect", image_urls=[image_path.as_uri()])
+
+        image = items[-1]["content"][1]
+        self.assertTrue(image["image_url"].startswith("data:image/jpeg;base64,"))
+
+    def test_missing_local_image_is_not_sent_as_invalid_url(self):
+        items = build_input_items([], "inspect", image_urls=["/missing/image.jpg"])
+        self.assertEqual(items[-1]["content"], [{"type": "input_text", "text": "inspect"}])
+
+    def test_image_signature_overrides_wrong_file_extension(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "actually-jpeg.png"
+            image_path.write_bytes(b"\xff\xd8\xff" + b"test-image")
+
+            items = build_input_items([], "inspect", image_urls=[str(image_path)])
+
+        self.assertTrue(items[-1]["content"][1]["image_url"].startswith("data:image/jpeg;base64,"))
+
+    def test_unsupported_image_data_uri_is_not_forwarded(self):
+        items = build_input_items(
+            [],
+            "inspect",
+            image_urls=["data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="],
+        )
+        self.assertEqual(items[-1]["content"], [{"type": "input_text", "text": "inspect"}])
+
     def test_input_mapping_preserves_audio_and_attachment_markers(self):
         items = build_input_items(
             [],

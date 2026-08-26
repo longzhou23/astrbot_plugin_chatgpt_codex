@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
+import re
+from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 from .types import TransportResponse, TransportToolCall, TransportUsage
 
 _REASONING_STATE_TYPE = "openai_responses_reasoning"
+_SUPPORTED_IMAGE_DATA_URI = re.compile(
+    r"^data:image/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=\r\n]+$",
+    re.IGNORECASE,
+)
+_MAX_INLINE_IMAGE_BYTES = 20 * 1024 * 1024
 
 
 def _as_dict(value: Any) -> dict[str, Any] | None:
@@ -64,6 +74,69 @@ def _media_ref(value: Any) -> str | None:
     return None
 
 
+def _local_path(value: str) -> Path | None:
+    """Resolve a plain path or file URL without treating remote URLs as files."""
+
+    parsed = urlsplit(value)
+    if parsed.scheme in {"http", "https", "data"}:
+        return None
+    if parsed.scheme == "file":
+        # ``file://localhost/path`` is local; every other host is deliberately
+        # rejected so the provider cannot turn a UNC/network path into an
+        # implicit file read.
+        if parsed.netloc not in {"", "localhost"}:
+            return None
+        path_value = unquote(parsed.path)
+        if len(path_value) >= 3 and path_value[0] == "/" and path_value[2] == ":":
+            path_value = path_value[1:]
+        return Path(path_value)
+    if parsed.scheme and not (len(parsed.scheme) == 1 and value[1:3] in {":\\", ":/"}):
+        return None
+    return Path(value)
+
+
+def _image_data_uri(value: str) -> str | None:
+    """Inline a readable local image for the remote Responses endpoint."""
+
+    if value.startswith("data:image/"):
+        return value if _SUPPORTED_IMAGE_DATA_URI.fullmatch(value) else None
+    if value.startswith(("http://", "https://")):
+        return value
+    path = _local_path(value)
+    if path is None:
+        return None
+    try:
+        if not path.is_file():
+            return None
+        if path.stat().st_size > _MAX_INLINE_IMAGE_BYTES:
+            return None
+        payload = path.read_bytes()
+    except (OSError, ValueError):
+        return None
+    if not payload:
+        return None
+    mime_type = mimetypes.guess_type(path.name)[0]
+    # Codex vision accepts the common raster formats. Do not forward SVG or an
+    # arbitrary attachment merely because its extension claims to be an image.
+    signatures = (
+        (b"\x89PNG\r\n\x1a\n", "image/png"),
+        (b"\xff\xd8\xff", "image/jpeg"),
+        (b"GIF87a", "image/gif"),
+        (b"GIF89a", "image/gif"),
+    )
+    detected = next((kind for signature, kind in signatures if payload.startswith(signature)), None)
+    if detected is None and payload.startswith(b"RIFF") and payload[8:12] == b"WEBP":
+        detected = "image/webp"
+    if detected is None:
+        return None
+    # The byte signature is authoritative; an incorrect filename suffix must
+    # not produce a mismatched Content-Type that the API rejects with HTTP 400.
+    if mime_type != detected:
+        mime_type = detected
+    encoded = base64.b64encode(payload).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
 def _reasoning_items(part: dict[str, Any]) -> list[dict[str, Any]]:
     """Restore opaque Responses reasoning items, never plaintext reasoning."""
 
@@ -88,7 +161,7 @@ def _image_part(part: dict[str, Any]) -> dict[str, Any] | None:
     part_type = part.get("type")
     if part_type in {"input_image", "image", "local_image", "localImage"}:
         image_url = _media_ref(part.get("image_url") or part.get("url"))
-        if not image_url or not image_url.startswith(("data:", "http://", "https://")):
+        if not image_url:
             return None
         detail = part.get("detail", "auto")
     elif part_type == "image_url":
@@ -98,6 +171,9 @@ def _image_part(part: dict[str, Any]) -> dict[str, Any] | None:
             return None
         detail = image.get("detail", "auto") if isinstance(image, dict) else "auto"
     else:
+        return None
+    image_url = _image_data_uri(image_url)
+    if image_url is None:
         return None
     if detail not in {"low", "high", "auto"}:
         detail = "auto"

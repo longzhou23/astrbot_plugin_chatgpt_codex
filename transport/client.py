@@ -10,6 +10,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import ProxyHandler, Request, build_opener, urlopen
 
+from ..codex_security import safe_error
 from .auth import CodexAuthStore
 from .models import parse_transport_models
 from .quota import rate_limits_from_headers
@@ -91,6 +92,26 @@ class CodexTransportClient:
             return build_opener(ProxyHandler({})).open(request, timeout=timeout)
         return urlopen(request, timeout=timeout)
 
+    @staticmethod
+    def _http_error(code: int, raw: bytes = b"") -> TransportProtocolError:
+        """Expose a bounded redacted server reason without logging request data."""
+
+        detail = ""
+        try:
+            value = json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeError):
+            value = None
+        if isinstance(value, dict):
+            error = value.get("error")
+            if isinstance(error, dict):
+                candidate = error.get("message") or error.get("detail") or error.get("code")
+            else:
+                candidate = value.get("message") or value.get("detail")
+            if isinstance(candidate, str):
+                detail = safe_error(candidate, limit=300)
+        suffix = f": {detail}" if detail else ""
+        return TransportProtocolError(f"Codex transport HTTP {code}{suffix}")
+
     async def get_account(self) -> dict[str, Any]:
         snapshot = await self.auth.snapshot(refresh=False)
         return {
@@ -147,7 +168,7 @@ class CodexTransportClient:
         if status == 429:
             raise TransportQuotaError("Codex transport 配额或速率限制")
         if not 200 <= status < 300:
-            raise TransportProtocolError(f"Codex transport HTTP {status}")
+            raise self._http_error(status, raw)
         try:
             return json.loads(raw.decode("utf-8"))
         except (ValueError, UnicodeError) as exc:
@@ -196,7 +217,8 @@ class CodexTransportClient:
                     raise TransportAuthError("Codex transport 鉴权失败") from exc
                 if exc.code == 429:
                     raise TransportQuotaError("Codex transport 配额或速率限制") from exc
-                raise TransportProtocolError(f"Codex transport HTTP {exc.code}") from exc
+                raw = exc.read(4096)
+                raise self._http_error(exc.code, raw) from exc
             except (URLError, TimeoutError, OSError) as exc:
                 raise TransportNetworkError("Codex transport 连接失败") from exc
 

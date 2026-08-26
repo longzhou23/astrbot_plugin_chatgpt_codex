@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 _SECRET_PATTERNS = (
+    re.compile(r"(?i)data:[^;\s]+;base64,[A-Za-z0-9+/=_-]+"),
     re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+"),
     re.compile(r"(?i)(access[_ -]?token\s*[:=]\s*)[^\s,;]+"),
     re.compile(r"(?i)(refresh[_ -]?token\s*[:=]\s*)[^\s,;]+"),
@@ -21,8 +22,9 @@ def redact_text(value: str) -> str:
     """Redact common credentials without attempting to parse or persist them."""
 
     result = value
-    for pattern in _SECRET_PATTERNS:
-        result = pattern.sub(r"\1<redacted>", result)
+    for index, pattern in enumerate(_SECRET_PATTERNS):
+        replacement = "<redacted-data-uri>" if index == 0 else r"\1<redacted>"
+        result = pattern.sub(replacement, result)
     return result
 
 
