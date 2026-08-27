@@ -175,7 +175,10 @@ OAuth token exchange、Device Code 申请、Responses Transport 和 App Server
 - **设置**：中文配置项、后端选择、Codex 路径、登录方式、推理强度、并发数、
   超时时间、代理和本机工具开关。
 
-进入概览或刷新页面时，插件会重新获取账号状态、服务端模型和可用配额信息。
+进入概览或刷新页面时，插件会重新获取账号状态、服务端模型和可用配额信息。Transport
+推理本身不提供账号配额 RPC，因此配额页面会按需启动一次 `codex app-server`，调用官方
+`account/rateLimits/read` 获取窗口；这不会改变聊天仍使用 Responses Transport，也不会为每次
+聊天请求启动 App Server。如果该 RPC 暂时不可用，页面会退回最近一次 Responses 响应头快照。
 如果没有登录，页面会显示登录入口；浏览器 OAuth 完成后，将回调页面显示的
 `localhost` 链接交回插件页面，以完成服务端登录确认。
 
