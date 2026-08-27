@@ -521,6 +521,31 @@ class TransportTests(unittest.TestCase):
             ],
         )
 
+    def test_duplicate_current_image_keeps_latest_occurrence(self):
+        image = "data:image/png;base64,c2FtZQ=="
+        items = build_input_items(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "旧消息"},
+                        {"type": "image_url", "image_url": {"url": image}},
+                    ],
+                }
+            ],
+            "再看一次",
+            image_urls=[image],
+        )
+        image_parts = [
+            part
+            for item in items
+            if item.get("type") == "message"
+            for part in item.get("content", [])
+            if part.get("type") == "input_image"
+        ]
+        self.assertEqual(len(image_parts), 1)
+        self.assertEqual(items[-1]["content"][-1]["image_url"], image)
+
     def test_auth_file_is_not_needed_for_request_serialization(self):
         with tempfile.TemporaryDirectory() as directory:
             self.assertFalse((Path(directory) / "auth.json").exists())

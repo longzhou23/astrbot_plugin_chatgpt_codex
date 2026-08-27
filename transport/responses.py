@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import mimetypes
 import re
@@ -466,7 +467,49 @@ def build_input_items(
                 result.append({"type": "function_call_output", "call_id": call_id, "output": output})
         elif role == "assistant":
             result.extend(_function_call_items(message.get("tool_calls")))
-    return result
+    return _deduplicate_input_media(result)
+
+
+def _deduplicate_input_media(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep the latest occurrence of identical image/audio input content.
+
+    AstrBot may expose the current image both in the final context message and
+    in ``image_urls``.  Full-history replay can also contain an earlier copy of
+    a sticker that the user sends again.  Walk backwards so the current/latest
+    occurrence wins while text, tool calls and tool outputs remain untouched.
+    """
+
+    seen: set[tuple[str, str]] = set()
+    normalized: list[dict[str, Any]] = []
+    for item in reversed(items):
+        if item.get("type") != "message" or not isinstance(item.get("content"), list):
+            normalized.append(item)
+            continue
+        content: list[dict[str, Any]] = []
+        for part in reversed(item["content"]):
+            if not isinstance(part, dict):
+                continue
+            part_type = part.get("type")
+            ref = None
+            if part_type == "input_image":
+                ref = _media_ref(part.get("image_url") or part.get("file_id"))
+            elif part_type == "input_audio":
+                ref = _media_ref(part.get("audio_url") or part.get("input_audio"))
+            if ref:
+                # Avoid retaining a potentially multi-megabyte data URI in the
+                # deduplication set while the request is being normalized.
+                key = (str(part_type), hashlib.sha256(ref.encode("utf-8")).hexdigest())
+                if key in seen:
+                    continue
+                seen.add(key)
+            content.append(part)
+        content.reverse()
+        if content:
+            copy = dict(item)
+            copy["content"] = content
+            normalized.append(copy)
+    normalized.reverse()
+    return normalized
 
 
 def response_request(

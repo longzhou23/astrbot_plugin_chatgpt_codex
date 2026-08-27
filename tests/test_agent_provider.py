@@ -1,13 +1,16 @@
 import unittest
 
 from ..agent_provider import (
+    _collect_provider_response,
     _conversation_key,
     _ensure_supported_modalities,
     _has_non_text_content,
     _is_title_generation_request,
     _normalize_request_inputs,
     _stream_frames,
+    _stream_provider_responses,
 )
+from ..transport.types import TransportError
 
 
 async def event_stream(events):
@@ -125,6 +128,37 @@ class AgentProviderContractTests(unittest.IsolatedAsyncioTestCase):
             )
         ]
         self.assertEqual(frames[-1], ("", False))
+
+    async def test_non_streaming_adapter_preserves_tool_calls(self):
+        response = await _collect_provider_response(
+            event_stream(
+                [
+                    {
+                        "kind": "tool_call",
+                        "tool_calls": [
+                            {
+                                "call_id": "call-search-1",
+                                "name": "web_search",
+                                "arguments": '{"query":"latest"}',
+                            }
+                        ],
+                    }
+                ]
+            )
+        )
+        self.assertEqual(response.role, "tool")
+        self.assertEqual(response.tools_call_name, ["web_search"])
+        self.assertEqual(response.tools_call_args, [{"query": "latest"}])
+        self.assertEqual(response.tools_call_ids, ["call-search-1"])
+
+    async def test_streaming_adapter_rejects_empty_terminal_response(self):
+        with self.assertRaises(TransportError):
+            _ = [
+                response
+                async for response in _stream_provider_responses(
+                    event_stream([{"kind": "final", "text": ""}])
+                )
+            ]
 
 
 if __name__ == "__main__":

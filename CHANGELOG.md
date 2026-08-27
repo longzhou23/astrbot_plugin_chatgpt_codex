@@ -17,6 +17,9 @@ tags.
   `input_image.image_url` 发送而导致 HTTP 400；受支持的本地图片现在会验证实际
   格式并安全内联为 data URI。
 - HTTP 协议错误会保留服务端提供的有限错误原因，同时对内联图片内容进行脱敏。
+- 修复非流式 Agent Runner 丢失 Responses function call 的问题；搜索、表情包和星图
+  工具现在可以正常进入 AstrBot 的工具循环，不再被误判为空回复。
+- 对历史上下文中的重复图片和音频做去重，避免重复发送同一张表情包或天文图片。
 
 ### English
 
@@ -25,6 +28,11 @@ tags.
   signature-validated and safely inlined as data URIs.
 - HTTP protocol errors now preserve a bounded server-provided reason while
   redacting inline image data.
+- Fixed non-streaming Agent Runner calls dropping Responses function calls; search,
+  sticker, and star-field tools now reach AstrBot's tool loop instead of becoming
+  empty assistant messages.
+- Deduplicated repeated image and audio inputs in replayed context to avoid sending
+  the same sticker or astronomy image more than once.
 
 ## 0.3.0-beta.2 — 2026-08-26 / 第二个公开 Beta
 

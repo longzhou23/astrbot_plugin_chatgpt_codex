@@ -11,6 +11,7 @@ from typing import Any
 
 from .codex_service import CodexService
 from .transport.responses import openai_tools_to_responses
+from .transport.types import TransportError
 
 try:
     from astrbot.api.provider import Provider
@@ -22,6 +23,27 @@ try:
     _ASTRBOT_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _ASTRBOT_AVAILABLE = False
+
+    class LLMResponse:  # type: ignore[no-redef]
+        """Small host-free contract double used by adapter unit tests."""
+
+        def __init__(
+            self,
+            role: str,
+            completion_text: str | None = None,
+            tools_call_args: list[dict[str, Any]] | None = None,
+            tools_call_name: list[str] | None = None,
+            tools_call_ids: list[str] | None = None,
+            reasoning_signature: str | None = None,
+            is_chunk: bool = False,
+        ) -> None:
+            self.role = role
+            self.completion_text = completion_text or ""
+            self.tools_call_args = tools_call_args or []
+            self.tools_call_name = tools_call_name or []
+            self.tools_call_ids = tools_call_ids or []
+            self.reasoning_signature = reasoning_signature
+            self.is_chunk = is_chunk
 
 
 _SERVICE: CodexService | None = None
@@ -214,7 +236,7 @@ async def _stream_provider_responses(
             if names:
                 saw_tool_call = True
                 yield LLMResponse(
-                    role="assistant",
+                    role="tool",
                     tools_call_args=args,
                     tools_call_name=names,
                     tools_call_ids=ids,
@@ -236,12 +258,35 @@ async def _stream_provider_responses(
     # as an empty assistant message and produces a warning (and can lose the
     # response when no streaming delta reached the outer pipeline).
     completed_text = final_text or "".join(accumulated_text)
+    if not completed_text.strip():
+        raise TransportError("Codex transport 返回空白响应")
     yield LLMResponse(
         role="assistant",
         completion_text=completed_text,
         reasoning_signature=reasoning_signature,
         is_chunk=False,
     )
+
+
+async def _collect_provider_response(
+    events: AsyncGenerator[dict[str, Any], None],
+) -> LLMResponse:
+    """Collect one non-streaming response without discarding function calls.
+
+    AstrBot uses ``text_chat`` for several plugin-owned and non-streaming Agent
+    Runner paths.  Returning only ``run_turn()`` text loses a perfectly valid
+    function-call response and makes AstrBot report an empty assistant message.
+    Reuse the same terminal adapter as streaming so both paths have identical
+    text, tool-call, reasoning-signature and empty-output semantics.
+    """
+
+    terminal: LLMResponse | None = None
+    async for response in _stream_provider_responses(events):
+        if not response.is_chunk:
+            terminal = response
+    if terminal is None:
+        raise TransportError("Codex transport 未返回终态响应")
+    return terminal
 
 
 if _ASTRBOT_AVAILABLE:
@@ -333,7 +378,7 @@ if _ASTRBOT_AVAILABLE:
             ephemeral = _is_ephemeral_session(session_id)
             latest_prompt, historical_contexts = _normalize_request_inputs(prompt, contexts)
             try:
-                text = await self._service().run_turn(
+                events = self._service().stream_turn(
                     session_key=session_key,
                     prompt=latest_prompt,
                     contexts=historical_contexts,
@@ -345,11 +390,11 @@ if _ASTRBOT_AVAILABLE:
                     model=model or self.model_name,
                     tools=openai_tools_to_responses(func_tool),
                 )
+                return await _collect_provider_response(events)
             finally:
                 if ephemeral:
                     with contextlib.suppress(Exception):
                         await self._service().reset_session(session_key)
-            return LLMResponse(role="assistant", completion_text=text)
 
         async def text_chat_stream(
             self,
