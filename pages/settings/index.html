@@ -18,6 +18,9 @@
 .button.primary{border:0;background:var(--accent);color:#fff}
 .button.primary:hover{background:var(--accent-strong)}
 </style>
+<style>
+.quota-card{margin-top:16px}.quota-card .section-head{margin-bottom:18px}.quota-card h2{margin:0;font-size:18px}.quota-card p{margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.5}.quota-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.quota-metric{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb,var(--text) 3%,transparent)}.quota-metric span{display:block;color:var(--muted);font-size:12px}.quota-metric strong{display:block;margin-top:5px;font-size:20px;letter-spacing:-.03em}.quota-progress{height:9px;margin-top:16px;border-radius:99px;background:var(--line);overflow:hidden}.quota-progress span{display:block;width:0;height:100%;border-radius:inherit;background:var(--accent);transition:width .3s ease}.quota-foot{display:flex;justify-content:space-between;gap:12px;margin-top:9px;color:var(--muted);font-size:11px}.quota-foot strong{color:var(--text);font-weight:650}@media(max-width:700px){.quota-metrics{grid-template-columns:1fr}.quota-foot{align-items:flex-start;flex-direction:column}}
+</style>
 </head>
 <body>
 <main class="shell">
@@ -55,6 +58,12 @@
     </form>
     <div id="message" class="message" role="status" aria-live="polite"></div>
   </section>
+  <section class="card quota-card" aria-labelledby="settingsQuotaTitle">
+    <div class="section-head"><div><h2 id="settingsQuotaTitle">5 小时用量</h2><p>读取 ChatGPT Codex 账户的官方主配额窗口，不是本地 Token 统计。</p></div><span id="settingsQuotaState" class="pill">读取中</span></div>
+    <div class="quota-metrics"><div class="quota-metric"><span>已用</span><strong id="settingsQuotaUsed">—</strong></div><div class="quota-metric"><span>剩余</span><strong id="settingsQuotaRemaining">—</strong></div><div class="quota-metric"><span>窗口重置</span><strong id="settingsQuotaReset">—</strong></div></div>
+    <div class="quota-progress" aria-label="五小时配额使用比例"><span id="settingsQuotaBar"></span></div>
+    <div class="quota-foot"><span id="settingsQuotaWindow">窗口：5 小时</span><span id="settingsQuotaHint">页面访问时自动刷新</span></div>
+  </section>
   <div class="privacy">🔒 设置页面只处理配置白名单；不会读取或展示 access token、refresh token、Cookie 或 OAuth 回调敏感参数。</div>
 </main>
 <script>
@@ -65,8 +74,12 @@
   function errorText(e){const t=String(e?.message||e||"插件请求失败");return /\b(401|unauthori[sz]ed)\b/i.test(t)||/token.*(expired|invalid)/i.test(t)?"AstrBot WebUI 会话未授权或已过期，请先登录管理界面后刷新此页面。":t}
   async function call(endpoint,body){return body===undefined?await page.apiGet(endpoint):await page.apiPost(endpoint,body)}
   function dataOf(r){if(r?.status==="error")throw new Error(r.message||"插件请求失败");return r?.status==="ok"?(r.data||{}):(r||{})}
+  function percent(v){const n=Number(v);return Number.isFinite(n)?Math.max(0,Math.min(100,n)):null}
+  function quotaDate(v){const n=Number(v);return Number.isFinite(n)&&n>0?new Date(n*1000).toLocaleString("zh-CN",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—"}
+  function renderQuota(d){const state=$("settingsQuotaState"),r=d.rateLimits||{},windows=Object.values(r).filter(v=>v&&typeof v==="object"&&Number.isFinite(Number(v.usedPercent)));const p=windows.find(v=>Number(v.windowDurationMins)===300)||r.primary||windows[0];if(!p){state.className="pill wait";state.textContent="暂无数据";$("settingsQuotaHint").textContent="服务端暂未返回五小时配额窗口。";return}const used=percent(p.usedPercent);if(used===null){state.className="pill wait";state.textContent="暂无数据";$("settingsQuotaHint").textContent="服务端暂未返回有效使用比例。";return}const remaining=Math.max(0,100-used);$("settingsQuotaUsed").textContent=Math.round(used)+"%";$("settingsQuotaRemaining").textContent=Math.round(remaining)+"%";$("settingsQuotaReset").textContent=quotaDate(p.resetsAt);$("settingsQuotaBar").style.width=used+"%";$("settingsQuotaWindow").textContent="窗口："+(Number(p.windowDurationMins)===300?"5 小时":String(p.windowDurationMins||"—")+" 分钟");$("settingsQuotaHint").textContent="已从 account/rateLimits/read 刷新";state.className="pill ok";state.textContent="已更新"}
+  function renderQuotaError(error){const state=$("settingsQuotaState");state.className="pill wait";state.textContent="读取失败";$("settingsQuotaHint").textContent=errorText(error)}
   function applySettings(values){if(!values||typeof values!=="object")return;document.querySelectorAll("[data-setting]").forEach(node=>{const key=node.dataset.setting;if(!(key in values))return;if(node.type==="checkbox")node.checked=Boolean(values[key]);else node.value=String(values[key]??"")});dirty=false}
-  async function load(){try{const d=dataOf(await call("config"));applySettings(d.config||{});$("settingsState").className="pill ok";$("settingsState").textContent="已读取";$("settingsHint").textContent="页面访问时已读取当前配置。"}catch(e){$("settingsState").className="pill wait";$("settingsState").textContent="读取失败";$("settingsHint").textContent=errorText(e);message(errorText(e),"error")}}
+  async function load(){const results=await Promise.allSettled([call("config"),call("quota")]);const configResult=results[0],quotaResult=results[1];if(configResult.status==="fulfilled"){try{const d=dataOf(configResult.value);applySettings(d.config||{});$("settingsState").className="pill ok";$("settingsState").textContent="已读取";$("settingsHint").textContent="页面访问时已读取当前配置。"}catch(e){$("settingsState").className="pill wait";$("settingsState").textContent="读取失败";$("settingsHint").textContent=errorText(e);message(errorText(e),"error")}}else{$("settingsState").className="pill wait";$("settingsState").textContent="读取失败";$("settingsHint").textContent=errorText(configResult.reason);message(errorText(configResult.reason),"error")}if(quotaResult.status==="fulfilled"){try{renderQuota(dataOf(quotaResult.value))}catch(e){renderQuotaError(e)}}else renderQuotaError(quotaResult.reason)}
   async function save(event){event.preventDefault();const b=$("saveSettings"),values={};document.querySelectorAll("[data-setting]").forEach(node=>{values[node.dataset.setting]=node.type==="checkbox"?node.checked:node.type==="number"?Number(node.value):node.value.trim()});b.disabled=true;try{const d=dataOf(await call("config",{config:values}));applySettings(d.config||values);$("settingsState").className="pill ok";$("settingsState").textContent="已保存";$("settingsHint").textContent=d.restartRequired?"设置已保存；部分进程设置将在重启 AstrBot 后生效。":"设置已保存并立即生效。";message($("settingsHint").textContent,"success")}catch(e){$("settingsState").className="pill wait";$("settingsState").textContent="保存失败";$("settingsHint").textContent=errorText(e);message(errorText(e),"error")}finally{b.disabled=false}}
   function applyTheme(theme){const value=theme==="dark"?"dark":"light";document.documentElement.dataset.theme=value;$("themeToggle").textContent=value==="dark"?"亮色模式":"暗色模式";try{localStorage.setItem("astrbot_codex_theme",value)}catch{}}
   function initTheme(){let saved="";try{saved=localStorage.getItem("astrbot_codex_theme")||""}catch{}applyTheme(saved||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"))}
