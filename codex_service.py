@@ -578,14 +578,36 @@ class CodexService:
 
     async def read_quota(self) -> dict[str, Any]:
         if self.backend_mode == "transport":
-            return await self.transport.get_rate_limits()
+            # Responses Transport does not expose the account quota RPC.  Its
+            # response headers are only a best-effort request-local snapshot
+            # and are empty after restart in most deployments.  Read the
+            # official account window on demand through the already supported
+            # App Server RPC instead.  This does not change the inference
+            # backend: normal chat requests remain Transport-only.
+            try:
+                result = await self._request("account/rateLimits/read", {}, timeout=30)
+            except Exception as exc:
+                # Keep the header snapshot as a degraded fallback.  Do not
+                # make a quota-panel failure take down an otherwise working
+                # Transport installation, and never include exception text in
+                # the response because it may contain provider-specific data.
+                self.logger.debug(
+                    "Official quota RPC unavailable in Transport mode: %s", type(exc).__name__
+                )
+                return await self.transport.get_rate_limits()
+            return self._store_quota_result(result, source="app_server_rpc")
         result = await self._request("account/rateLimits/read", {}, timeout=30)
+        return self._store_quota_result(result, source="app_server_rpc")
+
+    def _store_quota_result(self, result: Any, *, source: str) -> dict[str, Any]:
+        """Keep only the documented display fields returned by the quota RPC."""
+
         if isinstance(result, dict):
             self._rate_limits = (
                 result.get("rateLimits") if isinstance(result.get("rateLimits"), dict) else None
             )
             # This is a display snapshot, not a credential or raw response archive.
-            return {
+            response = {
                 key: result.get(key)
                 for key in (
                     "rateLimits",
@@ -595,6 +617,9 @@ class CodexService:
                 )
                 if key in result
             }
+            if source and "source" not in result:
+                response["source"] = source
+            return response
         return {}
 
     async def list_models(self, *, refresh: bool = False) -> list[CodexModel]:
