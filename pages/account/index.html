@@ -156,6 +156,15 @@ button{font:inherit;cursor:pointer}
 .kpi span{display:block;margin-top:6px;color:var(--muted);font-size:12px;line-height:1.5}
 
 /* ---- Quota card (Codex-style usage) ---- */
+.quota-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.quota-card{min-width:0}
+.quota-card .card-head{min-height:54px}
+.quota-card .card-head p{max-width:340px}
+.quota-card .usage-hero{align-items:flex-end;gap:14px}
+.quota-card .usage-big{font-size:44px}
+.quota-card .usage-side{gap:9px}
+.quota-card .info-list{gap:10px}
+.quota-card.is-unavailable .usage-big,.quota-card.is-unavailable .caption{color:var(--muted2)}
 .usage-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px}
 .usage-big{font-family:"Outfit",sans-serif;font-weight:600;font-size:52px;letter-spacing:-.03em;color:var(--heading);line-height:1;font-variant-numeric:tabular-nums}
 .usage-big small{display:block;margin-top:8px;font-family:"PingFang SC",sans-serif;font-size:12px;font-weight:600;letter-spacing:0;color:var(--muted2)}
@@ -234,7 +243,7 @@ button{font:inherit;cursor:pointer}
 .hm-stat strong .hat{font-size:11px;color:var(--muted);font-weight:500;margin-left:5px}
 
 @media(max-width:860px){
-  .overview-grid,.kpi-grid{grid-template-columns:1fr}
+  .overview-grid,.quota-grid,.kpi-grid{grid-template-columns:1fr}
   .account-banner{flex-direction:column;align-items:flex-start}
   .kpi-grid{grid-template-columns:repeat(2,1fr)}
 }
@@ -318,24 +327,45 @@ button{font:inherit;cursor:pointer}
     </div>
   </section>
 
-  <!-- Quota card (Codex-style usage) -->
-  <section class="card" data-od-id="quota-card">
-    <div class="card-head"><div><h2>用量</h2><p>ChatGPT Codex 计划在本地应用的实时用量窗口，与下方的本地 Token 使用统计分开显示。</p></div><span class="caption" id="quotaWindowName">5 小时滚动窗口</span></div>
-    <div class="usage-hero">
-      <div class="usage-big" id="quotaRemaining">—<small>当前窗口已使用</small></div>
-      <div class="usage-side">
-        <div><span class="pill" id="quotaUsed">—</span><span class="pill-label"> 已使用</span></div>
-        <div class="usage-line"><span>窗口配额</span><strong id="quotaWindow">—</strong></div>
-        <div class="usage-line"><span>可用重置次数</span><strong id="resetCredits">—</strong></div>
+  <!-- Quota cards (Codex-style usage) -->
+  <section class="quota-grid" data-od-id="quota-grid" aria-label="Codex 配额">
+    <article class="card quota-card" id="quota5hCard" data-quota-window="300">
+      <div class="card-head"><div><h2>5 小时配额</h2><p>官方账号滚动窗口的实时使用情况。</p></div><span class="caption" id="quota5hName">5 小时窗口</span></div>
+      <div class="usage-hero">
+        <div class="usage-big" id="quota5hUsed">—<small>当前窗口已使用</small></div>
+        <div class="usage-side">
+          <div><span class="pill" id="quota5hRate">—</span><span class="pill-label"> 已使用</span></div>
+          <div class="usage-line"><span>窗口时长</span><strong id="quota5hWindow">—</strong></div>
+        </div>
       </div>
-    </div>
-    <div class="track track-lg"><span id="quotaBar" style="width:0%"></span></div>
-    <div class="quota-meta"><span>0%</span><span id="quotaReset">重置倒计时：—</span><span>100%</span></div>
-    <div class="info-list" style="margin-top:16px">
-      <div class="info-row"><span>剩余可用</span><strong id="quotaRemainingPct">—</strong></div>
-      <div class="info-row"><span>重置倒计时</span><strong id="quotaCountdown">—</strong></div>
-      <div class="info-row"><span>Credits</span><strong id="quotaCredits">—</strong></div>
-    </div>
+      <div class="track track-lg"><span id="quota5hBar" style="width:0%"></span></div>
+      <div class="quota-meta"><span>0%</span><span id="quota5hReset">重置倒计时：—</span><span>100%</span></div>
+      <div class="info-list" style="margin-top:16px">
+        <div class="info-row"><span>剩余可用</span><strong id="quota5hRemaining">—</strong></div>
+        <div class="info-row"><span>重置倒计时</span><strong id="quota5hCountdown">—</strong></div>
+        <div class="info-row"><span>Credits</span><strong id="quota5hCredits">—</strong></div>
+        <div class="info-row"><span>可用重置次数</span><strong id="quota5hResetCredits">—</strong></div>
+      </div>
+    </article>
+
+    <article class="card quota-card" id="quota7dCard" data-quota-window="10080">
+      <div class="card-head"><div><h2>7 天配额</h2><p>官方账号滚动窗口的实时使用情况。</p></div><span class="caption" id="quota7dName">7 天窗口</span></div>
+      <div class="usage-hero">
+        <div class="usage-big" id="quota7dUsed">—<small>当前窗口已使用</small></div>
+        <div class="usage-side">
+          <div><span class="pill" id="quota7dRate">—</span><span class="pill-label"> 已使用</span></div>
+          <div class="usage-line"><span>窗口时长</span><strong id="quota7dWindow">—</strong></div>
+        </div>
+      </div>
+      <div class="track track-lg"><span id="quota7dBar" style="width:0%"></span></div>
+      <div class="quota-meta"><span>0%</span><span id="quota7dReset">重置倒计时：—</span><span>100%</span></div>
+      <div class="info-list" style="margin-top:16px">
+        <div class="info-row"><span>剩余可用</span><strong id="quota7dRemaining">—</strong></div>
+        <div class="info-row"><span>重置倒计时</span><strong id="quota7dCountdown">—</strong></div>
+        <div class="info-row"><span>Credits</span><strong id="quota7dCredits">—</strong></div>
+        <div class="info-row"><span>可用重置次数</span><strong id="quota7dResetCredits">—</strong></div>
+      </div>
+    </article>
   </section>
 
   <!-- Usage summary -->
@@ -461,7 +491,12 @@ button{font:inherit;cursor:pointer}
   function setConnectedState(connected){$("login").textContent=connected?"重新登录":"使用 ChatGPT 登录";setConn(connected,"已连接");const badge=$("connState");if(badge&&connected){badge.innerHTML='<i class="stat-dot"></i><span>已连接</span>';}}
   function renderSetup(d){const panel=$("setupPanel");if(!panel)return;const codex=d.codex||{},account=d.account||{},connected=Boolean(account.email||account.type);detectedLoginMode=d.login_mode==="device_code"?"device_code":"browser";const show=d.setup_completed!==true||!connected||d.auth_required===true;panel.hidden=!show;if(!show)return;const path=$("setupCodexPath"),mode=$("setupLoginMode"),det=$("setupDetection");if(path&&document.activeElement!==path&&(codex.configured||codex.resolved))path.value=String(codex.configured||codex.resolved||"codex");if(mode&&d.login_mode)mode.value=String(d.login_mode);if(det){det.className="state-line";const ok=codex.available;det.innerHTML='<span class="spinner"></span>';const span=document.createElement("span");span.textContent=(ok?"Codex 已找到：":"未找到 Codex：")+(ok?(codex.resolved||codex.configured||"codex"):(codex.error||"请填写可执行文件名或绝对路径"));det.appendChild(span);}}
   function renderStatus(d){const a=d.account||{},connected=Boolean(a.email||a.type),transport=d.backend_mode==="transport";$("accountName").textContent=connected?(a.email||"ChatGPT Codex"):"ChatGPT Codex";$("accountEmail").textContent=connected?(a.email||"ChatGPT 账号已连接"):"尚未登录";$("accountPlan").textContent=a.planType||"未登录";setConnectedState(connected);$("serverStatus").textContent=transport?"Responses Transport":(d.process==="healthy"?"正常":(d.process||"—"));$("currentModel").textContent=d.model||"auto";$("currentEffort").textContent=d.effort||"auto";if(d.login_error&&!connected)message(sanitize(d.login_error),"error");return connected;}
-  function renderQuota(d){const box=$("quotaRemaining");if(!box)return;const r=d.rateLimits||{},p=r.primary;if(!p||!Number.isFinite(Number(p.usedPercent))){box.innerHTML="—<small>当前窗口</small>";return;}const u=percent(p.usedPercent),remaining=Math.max(0,100-u);box.innerHTML=u+"<small>当前窗口已使用</small>";$("quotaBar").style.width=u+"%";$("quotaUsed").textContent=Math.round(u)+"%";$("quotaRemainingPct").textContent=Math.round(remaining)+"%";$("quotaWindow").textContent=durationText(p.windowDurationMins);$("quotaWindowName").textContent=p.windowName||"5 小时滚动窗口";$("quotaReset").textContent="重置倒计时："+countdownText(p.resetsAt);$("quotaCountdown").textContent=countdownText(p.resetsAt);$("quotaCredits").textContent=r.credits&&r.credits.unlimited?"无限":(r.credits&&r.credits.hasCredits?"余额 "+(r.credits.balance??"可用"):"无额外 credits");$("resetCredits").textContent=String(d.rateLimitResetCredits?.availableCount??0);}
+  function quotaWindow(r,minutes,fallbackKey){const candidates=[];const add=value=>{if(!value)return;if(Array.isArray(value)){value.forEach(add);return;}if(typeof value!=="object")return;const duration=Number(value.windowDurationMins??value.window_duration_mins);if(Number.isFinite(duration)||Object.prototype.hasOwnProperty.call(value,"usedPercent")||Object.prototype.hasOwnProperty.call(value,"used_percent"))candidates.push(value);["windows","limits"].forEach(key=>{if(value[key])add(value[key]);});};add(r);const exact=candidates.find(w=>Number(w.windowDurationMins??w.window_duration_mins)===minutes);if(exact)return exact;const fallback=r&&r[fallbackKey];return fallback&&typeof fallback==="object"?fallback:null;}
+  function quotaUsedPercent(w){return Number(w?.usedPercent??w?.used_percent);}
+  function quotaResetAt(w){return w?.resetsAt??w?.resets_at;}
+  function quotaDurationText(m){return Number(m)===10080?"7 天":durationText(m);}
+  function renderQuotaCard(prefix,card,w,title,credits,resetCredits){const valid=Number.isFinite(quotaUsedPercent(w));card.classList.toggle("is-unavailable",!valid);if(!valid){$(prefix+"Used").innerHTML="—<small>服务端未返回该窗口</small>";$(prefix+"Rate").textContent="—";$(prefix+"Window").textContent="—";$(prefix+"Bar").style.width="0%";$(prefix+"Name").textContent="暂不可用";$(prefix+"Reset").textContent="重置倒计时：—";$(prefix+"Remaining").textContent="—";$(prefix+"Countdown").textContent="—";$(prefix+"Credits").textContent=credits;$(prefix+"ResetCredits").textContent=resetCredits;return;}const u=percent(quotaUsedPercent(w)),remaining=Math.max(0,100-u),resetAt=quotaResetAt(w);$(prefix+"Used").innerHTML=u+"<small>当前窗口已使用</small>";$(prefix+"Rate").textContent=Math.round(u)+"%";$(prefix+"Window").textContent=quotaDurationText(w.windowDurationMins??w.window_duration_mins);$(prefix+"Name").textContent=w.windowName||title;$(prefix+"Bar").style.width=u+"%";$(prefix+"Reset").textContent="重置倒计时："+countdownText(resetAt);$(prefix+"Remaining").textContent=Math.round(remaining)+"%";$(prefix+"Countdown").textContent=countdownText(resetAt);$(prefix+"Credits").textContent=credits;$(prefix+"ResetCredits").textContent=resetCredits;}
+  function renderQuota(d){const r=d.rateLimits||{},credits=r.credits&&r.credits.unlimited?"无限":(r.credits&&r.credits.hasCredits?"余额 "+(r.credits.balance??"可用"):"无额外 credits"),resetCredits=String(d.rateLimitResetCredits?.availableCount??0);renderQuotaCard("quota5h",$("quota5hCard"),quotaWindow(r,300,"primary"),"5 小时窗口",credits,resetCredits);renderQuotaCard("quota7d",$("quota7dCard"),quotaWindow(r,10080,"secondary"),"7 天窗口",credits,resetCredits);}
   function renderErrorState(container,msg){if(!container)return;container.className="error-box";container.textContent=msg;}
 
   async function load(silent=false){if(refreshBusy)return;refreshBusy=true;try{const results=await Promise.allSettled([call("status"),call("models"),call("quota")]);if(results[0].status==="fulfilled")renderStatus(dataOf(results[0].value));if(results[1].status==="fulfilled")renderModels(dataOf(results[1].value));if(results[2].status==="fulfilled")renderQuota(dataOf(results[2].value));const failed=results.filter(r=>r.status==="rejected");if(failed.length){if(!silent)message(errorText(failed[0].reason),"error");}else if(!silent){message("概览、服务端模型和配额已更新。","success");}}catch(e){if(!silent)message(errorText(e),"error");}finally{refreshBusy=false;}}

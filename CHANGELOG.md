@@ -1,15 +1,15 @@
 # Changelog / 更新日志
 
-本文件按仓库实际提交历史整理。当前包含 `v0.3.0-beta.1` 和
-`v0.3.0-beta.2` 两个正式 Git 标签；`0.1.0` 和 `0.2.0` 是对应历史阶段的
-开发里程碑，并不是曾经单独发布过的公开标签。
+本文件按仓库实际提交历史整理。当前正式发布版本为 `v1.0.0`；
+`v0.3.0-beta.1` 和 `v0.3.0-beta.2` 是此前的公开 Beta 标签；`0.1.0` 和
+`0.2.0` 是对应历史阶段的开发里程碑，并不是曾经单独发布过的公开标签。
 
-This changelog follows the repository's actual commit history. The repository
-now has two formal Git tags, `v0.3.0-beta.1` and `v0.3.0-beta.2`; `0.1.0` and
-`0.2.0` are historical development milestones, not separately published public
-tags.
+This changelog follows the repository's actual commit history. The current
+formal release is `v1.0.0`; `v0.3.0-beta.1` and `v0.3.0-beta.2` were the public
+Beta tags, while `0.1.0` and `0.2.0` are historical development milestones,
+not separately published public tags.
 
-## Unreleased / 未发布
+## 1.0.0 — 2026-08-28 / 正式版
 
 ### 中文
 
@@ -21,9 +21,11 @@ tags.
 - 按 `Website-Clone.zip` 提供的新版账户概览与设置页面更新前端，仅补充插件桥接脚本和实际 WebUI 路由。
 - 修复插件页面内的概览、设置导航，普通左键点击现在会正确切换宿主 AstrBot WebUI 页面，同时保留新标签页打开行为。
 - 修复设置页首次加载时缺少主题属性导致的白屏，页面现在会先以暗色主题渲染，再应用已保存的主题偏好。
+- 将概览页官方配额拆分为 5 小时和 7 天两张并排卡片，按服务端窗口时长读取真实数据；窄屏自动堆叠，缺失窗口显示明确空状态。
 - 修复非流式 Agent Runner 丢失 Responses function call 的问题；搜索、表情包和星图
   工具现在可以正常进入 AstrBot 的工具循环，不再被误判为空回复。
 - 对历史上下文中的重复图片和音频做去重，避免重复发送同一张表情包或天文图片。
+- 将中文 `README.md` 设为默认文档入口，并补充概览页与设置页截图。
 
 ### English
 
@@ -40,11 +42,16 @@ tags.
   switches the host AstrBot WebUI page while new-tab behavior remains available.
 - Fixed the settings page white flash caused by a missing initial theme attribute;
   it now renders dark first and then applies the saved theme preference.
+- Split official overview quota data into side-by-side 5-hour and 7-day cards,
+  matched by the server-reported window duration; narrow screens stack the cards
+  and missing windows show an explicit unavailable state.
 - Fixed non-streaming Agent Runner calls dropping Responses function calls; search,
   sticker, and star-field tools now reach AstrBot's tool loop instead of becoming
   empty assistant messages.
 - Deduplicated repeated image and audio inputs in replayed context to avoid sending
   the same sticker or astronomy image more than once.
+- Made the Chinese `README.md` the default documentation entry point and added
+  overview and settings page screenshots.
 
 ## 0.3.0-beta.2 — 2026-08-26 / 第二个公开 Beta
 
