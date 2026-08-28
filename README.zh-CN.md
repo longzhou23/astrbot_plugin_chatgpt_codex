@@ -441,6 +441,14 @@ Transport 返回 Function Call 时，插件将名称、参数和 Call ID 转换�
 - Usage 时区与保留天数；
 - 本机工具安全开关。
 
+### 页面预览
+
+下面是插件页面的实际布局预览。部署到 AstrBot 后，概览页会替换空状态并读取当前账号、官方配额和本地 Usage；设置页会读取并保存当前实例配置。
+
+![概览页](docs/screenshots/overview.png)
+
+![设置页](docs/screenshots/settings.png)
+
 ---
 
 ## ⚙️ 常用配置
