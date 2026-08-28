@@ -13,6 +13,7 @@ Built on the official Codex sign-in flow, with a lightweight Responses transport
 [![Status](https://img.shields.io/badge/status-Beta-yellow)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex)
 
 </div>
+
 > [!IMPORTANT]
 > This plugin uses the **Codex sign-in state of your ChatGPT account**. It is not an OpenAI API-key proxy.<br>
 > ChatGPT Plus / Pro subscriptions and the OpenAI API are separate products with separate authorization, quota, and billing systems. The models, plan information, and rate limits actually available to the account are always determined by the Codex server.
