@@ -1,69 +1,208 @@
+<div align="center">
+
 # AstrBot ChatGPT Codex Bridge
 
-[中文文档](README.zh-CN.md)
+**在 AstrBot 中直接使用当前 ChatGPT 账号可用的 Codex 模型。**<br>
+基于官方 Codex 登录能力，提供轻量 Responses Transport、Codex App Server 回退、模型发现、配额读取、本地 Usage 统计与 AstrBot 原生工具调用桥接。
 
-`astrbot_plugin_chatgpt_codex` lets AstrBot use models made available to the signed-in ChatGPT account through the open-source Codex transport implementation. The recommended default is the lightweight experimental `transport` backend, which sends direct Responses HTTP/SSE requests without creating Codex threads or turns; the stable `codex app-server` backend remains available as a compatibility fallback. It does not use ChatGPT web cookies, browser capture, or a fabricated OpenAI-compatible endpoint.
+[![Version](https://img.shields.io/badge/version-v0.3.0--beta.2-orange)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex/releases)
+[![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D%204.13.0-blue)](https://github.com/AstrBotDevs/AstrBot)
+[![Codex](https://img.shields.io/badge/backend-OpenAI%20Codex-black)](https://github.com/openai/codex)
+[![Status](https://img.shields.io/badge/status-Beta-yellow)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex)
 
-## Beta 2 release
+</div>
 
-This repository is published as `v0.3.0-beta.2`, the second public beta of the
-current implementation. The recommended default path is the lightweight
-`transport` backend. The stable `app_server` backend remains available as a
-compatibility fallback when the experimental Responses endpoint is unavailable.
-Transport is still an experimental Codex client protocol surface and its
-ChatGPT endpoint shape can change with future Codex client releases.
+> [!IMPORTANT]
+> 本插件使用 **ChatGPT 账号的 Codex 登录态**，不是 OpenAI API Key 代理。<br>
+> ChatGPT Plus / Pro 等订阅与 OpenAI API 的额度、授权和计费体系彼此独立；实际可用模型、套餐和配额均以 Codex 服务端返回结果为准。
 
-The beta is intended for a fresh AstrBot test installation. Back up the
-plugin data directory before upgrading an existing installation, especially
-when switching backend modes or changing the Codex executable.
+---
 
-## First-start guide for a new instance
+## ✨ 功能概览
 
-The first login has one extra prerequisite that is easy to miss:
+- **AstrBot 原生 Provider**：注册 `chatgpt_codex` Provider Adapter，可直接作为 AstrBot 对话模型使用。
+- **官方 ChatGPT 登录**：支持浏览器 OAuth 与 Device Code；无需复制 Cookie、Access Token 或 Refresh Token。
+- **双后端设计**：
+  - `transport`：默认推荐，直接通过 Codex Responses HTTP/SSE 推理；
+  - `app_server`：使用官方 `codex app-server` Agent Loop；
+  - `auto`：优先 Transport，失败时单次回退 App Server。
+- **动态模型发现**：模型 ID 与 reasoning effort 均来自服务端 `model/list`，插件不硬编码模型列表。
+- **流式响应**：在 AstrBot 支持时原生输出流式文本。
+- **AstrBot 工具桥接**：结构化 function call 交还 AstrBot Agent Runner 执行，不在 Transport 内重复套第二层 Agent Loop。
+- **多模态输入**：支持文本、图片、音频和工具调用输入；附件能力按当前 Codex 协议安全降级。
+- **本地 Usage 面板**：统计输入、缓存输入、输出、reasoning、总 Token、缓存命中率、最近请求与年度热力图。
+- **官方配额读取**：配额窗口与本地 Usage 分开显示，避免混淆统计口径。
+- **轻量 Harness**：默认去除 coding-agent 场景下不必要的 prompt 来源，降低普通聊天的提示词开销。
+- **安全默认值**：Codex 本机 shell、文件系统写入、MCP、browser/computer control 等能力默认关闭。
+- **独立会话映射**：AstrBot 会话与 Codex thread 隔离，支持 thread 轮换、空闲 TTL、最大年龄和手动重置。
 
-### 1. Install Codex CLI
+---
 
-Follow the [official OpenAI Codex CLI setup guide](https://learn.chatgpt.com/docs/codex/cli)
-for the current installer. The commonly used commands are:
+## 🧩 它是怎么工作的？
 
-**macOS / Linux (standalone installer):**
+```mermaid
+flowchart LR
+    U[用户 / 群聊消息] --> A[AstrBot Agent Runner]
+    A --> P[ChatGPT Codex Provider Adapter]
+    P --> S[CodexService]
+
+    S -->|默认| T[Responses Transport<br/>HTTP + SSE]
+    S -->|兼容回退| C[codex app-server<br/>JSONL RPC]
+
+    T --> O[ChatGPT Codex 服务]
+    C --> O
+
+    A <-->|Function Call / Tool Result| P
+
+    S --> M[(models.json)]
+    S --> SS[(sessions.sqlite3)]
+    S --> US[(usage.db)]
+    S --> H[独立 CODEX_HOME]
+
+    US --> W[插件 WebUI<br/>Usage / 热力图 / 最近请求]
+    O --> Q[账号配额窗口]
+    Q --> W
+```
+
+### 普通对话请求链
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant AstrBot as AstrBot Agent Runner
+    participant Provider as chatgpt_codex Provider
+    participant Service as CodexService
+    participant Codex as Codex Responses
+
+    User->>AstrBot: 消息 + Persona + Context
+    AstrBot->>Provider: text_chat / text_chat_stream
+    Provider->>Service: 当前会话、模型、effort、工具定义
+    Service->>Codex: Responses HTTP/SSE
+    Codex-->>Service: 文本增量 / Function Call / Usage
+
+    alt 返回文本
+        Service-->>Provider: delta / final
+        Provider-->>AstrBot: LLMResponse
+        AstrBot-->>User: 流式回复
+    else 返回 Function Call
+        Service-->>Provider: tool_call
+        Provider-->>AstrBot: 结构化工具调用
+        AstrBot->>AstrBot: 执行 AstrBot 工具
+        AstrBot->>Provider: 带 Tool Result 的下一轮
+    end
+
+    Service->>Service: 记录真实 Usage
+```
+
+### 为什么没有“第二层 Agent Loop”？
+
+AstrBot 本身已经有 Agent Runner。默认的 Transport 路径只负责模型推理和结构化工具调用转换：
+
+```text
+AstrBot Agent Runner
+        │
+        ├── Persona / System Prompt
+        ├── Conversation Context
+        ├── AstrBot Tools
+        │
+        ▼
+ChatGPT Codex Provider
+        │
+        └── Responses Transport  ← 只负责推理，不再创建一套重复 Agent Loop
+```
+
+这样可以避免重复注入系统指令、重复执行工具循环，以及不必要的上下文膨胀。
+
+---
+
+## 🚀 安装
+
+### 1. 安装 Codex CLI
+
+首次登录依赖官方 Codex App Server，因此 **运行 AstrBot 的同一环境中必须存在可执行的 Codex CLI**。
+
+macOS / Linux：
 
 ```bash
 curl -fsSL https://chatgpt.com/codex/install.sh | sh
 ```
 
-**Windows, macOS, or Linux (npm):**
+或使用 npm：
 
 ```bash
 npm install -g @openai/codex
 ```
 
-The npm route requires a supported Node.js/npm installation. After installation,
-open a new terminal if the command is not immediately visible and verify it:
+确认：
 
-```text
+```bash
 codex --version
 ```
 
-Run this check as the same operating-system user that runs AstrBot. If the
-service account cannot find `codex` on `PATH`, set `codex_path` in the plugin
-settings to the absolute executable path, for example
-`C:\\Users\\<user>\\AppData\\Roaming\\npm\\codex.cmd` on Windows or
-`/usr/local/bin/codex` on Linux/macOS. The plugin uses the official Codex App
-Server OAuth / Device Code RPC for the first ChatGPT login.
+如果 AstrBot 服务账号无法直接找到 `codex`，请在插件设置中将 `codex_path` 填为可执行文件的绝对路径。
 
-On the first visit to the overview page, the plugin shows a welcome setup panel.
-It probes `codex` in the PATH of the environment where AstrBot is actually running.
-If the probe succeeds, leave the value as `codex`; only enter an absolute path when
-the probe fails. The same panel lets you choose browser OAuth or Device Code and
-starts the first login after saving the settings.
+### 2. 安装插件
 
-#### Docker users
+```bash
+git clone --branch v0.3.0-beta.2 --depth 1 \
+  https://github.com/longzhou23/astrbot_plugin_chatgpt_codex.git
+```
 
-When AstrBot runs in Docker, the plugin can see only the container filesystem and
-PATH. A host path such as `/usr/bin/codex`, `/usr/lib/node_modules`, or a Windows
-path is not visible inside the container. Check the container that actually runs
-AstrBot:
+将目录放入：
+
+```text
+AstrBot/data/plugins/astrbot_plugin_chatgpt_codex
+```
+
+然后重启 AstrBot。
+
+插件初始化时会注册 `ChatGPT Codex Subscription` Provider；已有用户配置不会被覆盖。
+
+---
+
+## 🔐 首次登录
+
+推荐直接使用插件 WebUI 完成初始化。
+
+```mermaid
+flowchart TD
+    A[打开插件「概览」页] --> B{检测到 Codex CLI?}
+    B -- 否 --> C[填写 codex_path<br/>或在 AstrBot 环境安装 Codex]
+    C --> B
+    B -- 是 --> D{选择登录方式}
+    D -->|Browser OAuth| E[打开授权页面完成 ChatGPT 登录]
+    E --> F{浏览器跳转 localhost?}
+    F -- 是 --> G[复制完整 callback URL<br/>包含 code + state]
+    F -- 否 --> I[等待登录完成]
+    G --> I
+    D -->|Device Code| H[打开验证地址<br/>输入一次性验证码]
+    H --> I
+    I --> J[登录态写入插件独立 CODEX_HOME]
+    J --> K[刷新模型 / 配额 / Provider 状态]
+```
+
+### Browser OAuth
+
+1. 打开插件 **概览** 页面；
+2. 点击 ChatGPT 登录；
+3. 在浏览器中完成授权；
+4. 如果最终跳转到了 `localhost`，把地址栏中的 **完整 URL** 粘贴回插件页面；
+5. 等待页面显示账号已登录。
+
+> [!WARNING]
+> 回调地址必须包含完整的 `?code=...&state=...`。不要把该 URL、Token、Cookie 或 `CODEX_HOME/auth.json` 发到 Issue、群聊或普通日志中。
+
+### Device Code
+
+适合无图形界面的远程服务器。选择 `device_code` 后，插件会显示验证地址与一次性验证码，按页面提示完成授权即可。
+
+---
+
+## 🐳 Docker 部署
+
+插件看到的是 **AstrBot 容器内部** 的 PATH 和文件系统，而不是宿主机环境。
+
+进入实际运行 AstrBot 的容器检查：
 
 ```bash
 docker compose exec astrbot sh
@@ -71,212 +210,461 @@ command -v codex
 codex --version
 ```
 
-If Codex is installed in the container but is not on `PATH`, enter the absolute path
-reported by `command -v codex` in the welcome page or settings page. For a durable
-deployment, put the installation in your Dockerfile and rebuild the image instead of
-installing into a running container:
+如果使用自定义镜像，建议将 Codex CLI 写进 Dockerfile，而不是只在正在运行的容器中临时安装：
 
 ```dockerfile
 RUN npm install -g --include=optional @openai/codex@0.149.1
 ```
 
-The plugin stores `CODEX_HOME` below AstrBot's persistent data directory, so the
-Compose deployment must mount `/AstrBot/data`. Complete ChatGPT OAuth once in the
-plugin welcome page; later restarts reuse the persisted login state. Do not copy a
-host Codex path into the container configuration.
+插件的 `CODEX_HOME` 位于 AstrBot 持久化数据目录下，因此请确保 `/AstrBot/data` 被正确挂载。
 
-### 2. Complete the first login
+如果需要网络代理，容器内的 `127.0.0.1` 指向 **容器自身**，不能直接代表宿主机代理。
 
-1. Restart AstrBot and open the plugin's WebUI overview. Click the ChatGPT
-   login button and finish the browser OAuth or Device Code flow. The login
-   button uses the mode currently saved in the welcome/settings page; Device
-   Code displays its verification URL and one-time user code.
-2. If browser OAuth ends at a `localhost` callback URL, paste the complete URL
-   back into the plugin page, including the full `?code=...&state=...` query.
-   Do not paste only the path or code and do not share the URL in logs or issue
-   reports. On a remote server, the browser's localhost is the browser computer,
-   not the server, so the complete callback must be submitted manually.
-3. After the page reports that the account is logged in, the credentials are
-   persisted in the plugin-owned `CODEX_HOME`. The recommended `transport`
-   backend can then read the login state and perform Responses inference
-   without starting `codex app-server` for each request.
+---
 
-If a new instance shows `No such file or directory: 'codex'` or
-`Unable to start Codex app-server`, Codex CLI is missing or `codex_path` is
-wrong. Fix that prerequisite first. Selecting `app_server` also requires the
-Codex executable for inference; selecting `transport` removes the App Server
-runtime requirement only after the initial official login has completed.
+## ⚙️ 后端模式
 
-The plugin never asks users to copy ChatGPT cookies, access tokens, refresh
-tokens, or passwords. Do not manually edit or share `CODEX_HOME/auth.json`.
+| 模式 | 推荐场景 | 推理链路 | Codex CLI 依赖 |
+| --- | --- | --- | --- |
+| `transport` | **默认推荐，普通聊天** | Responses HTTP/SSE | 首次登录需要；推理本身不启动 App Server |
+| `app_server` | 兼容 / 稳定 Agent Loop | `codex app-server` JSONL RPC | 推理期间需要 |
+| `auto` | 希望自动容错 | Transport 优先，失败后单次回退 App Server | 取决于最终后端 |
 
-## Important authorization boundary
+### `transport`
 
-ChatGPT Plus and the OpenAI API are separate products with separate authorization and billing. This plugin does not claim that a Plus subscription is an OpenAI API quota or API key. It asks the locally installed Codex App Server to perform its supported ChatGPT login flow, then uses only the account's actual Codex model catalog and rate limits.
+轻量路径，直接发送 Codex Responses 请求：
 
-The server's `model/list` response is authoritative. Model ids and reasoning efforts are not hard-coded, so names can change or be unavailable for a particular account.
+- 不创建 Codex thread / turn 作为 Transport 推理协议的一部分；
+- 不启动 App Server 作为每次聊天的推理后端；
+- 不暴露 Codex 本机 shell、文件系统、MCP 等能力；
+- AstrBot 工具以 function call 形式返回给 AstrBot Agent Runner 执行；
+- 适合机器人闲聊、群聊和普通 Agent 场景。
 
-## Backend architecture
+### `app_server`
 
-AstrBot's stable plugin surface exposes custom Providers, commands, and hooks. The plugin therefore uses a thin `chatgpt_codex` Provider adapter; AstrBot remains the outer Agent Runner and owns persona, memory, history, RAG, MCP, permissions, and tool-loop decisions. `CodexService` selects the inference backend:
+通过官方 `codex app-server` 的 JSONL RPC 工作，负责 thread / turn 生命周期与流式响应。需要原生 Codex Agent Loop 或 Transport 出现兼容性问题时可显式切换。
+
+### `auto`
+
+先尝试 Transport；遇到认证、模型、协议、网络等后端失败时执行一次 App Server 回退，不会无限重试配额耗尽请求。
+
+---
+
+## 🪶 Lightweight Harness
+
+默认：
 
 ```text
-AstrBot Agent Runner / message
-        |
-        v
-chatgpt_codex Provider (thin adapter)
-        |
-        v
-CodexService -- backend_mode=transport -------> Codex Responses HTTP/SSE
-        |                                        no thread/turn/tool harness
-        |
-        `-- backend_mode=app_server -------> codex app-server (stdio default)
-                                             thread/start + turn/start
+harness_mode = lightweight
 ```
 
-`backend_mode=transport` is the new default and recommended path. It uses the same `CODEX_HOME` login state, `.../codex/models`, and `.../codex/responses` shapes used by the open-source Codex client, but deliberately has no thread/turn, shell, filesystem, MCP, computer, browser, approval, or Codex built-in-tool methods. AstrBot `ToolSet` schemas are converted to Responses function tools and returned as structured tool calls to AstrBot; the plugin does not execute them. `backend_mode=app_server` remains the stable compatibility fallback. `auto` tries transport once and falls back to App Server on auth, model, protocol, network, or rate-limit failure. A fallback is one attempt only; quota exhaustion is never retried indefinitely.
+该模式面向 AstrBot 聊天场景，关闭 Codex coding-agent 中不必要的提示词来源，例如：
 
-The direct transport is experimental because the ChatGPT Codex backend endpoint is implemented in the open-source Codex client rather than documented as a general public API contract. It may change with a future Codex release. If a deployment needs the stable Agent Server protocol, select `app_server` explicitly.
+- permissions instructions；
+- apps instructions；
+- collaboration mode instructions；
+- skills instructions；
+- environment context；
+- project docs；
+- memories；
+- MCP servers；
+- Codex app tools；
+- `update_plan` / `request_user_input` 等可选工具。
 
-## Lightweight Chat Harness
+同时使用一段最小基础指令，明确：遵循 AstrBot Persona / System Prompt，只使用本轮显式提供的工具，并且不假设拥有 shell、文件系统、浏览器或本机环境访问权。
 
-The default `harness_mode` is `lightweight`. With the installed Codex 0.146.0
-App Server protocol, `thread/start` and `thread/resume` accept a real
-`baseInstructions` replacement field. The plugin uses that field instead of
-appending a second prompt, and supplies a short chat-only harness under 100
-English words. AstrBot's persona remains a separate `developerInstructions`
-value, so changing the persona changes the thread prompt version and rolls the
-thread instead of leaving an old persona in place.
-
-Lightweight threads also disable the current optional prompt sources through a
-thread-scoped Codex config override: permissions/apps/collaboration/skill and
-environment blocks, project docs, memories, MCP servers, Codex apps, the plan
-tool, and request-user-input. No AstrBot dynamic tools are sent in the default
-`minimal` route. The current App Server schema does not expose a general
-"disable every built-in core tool" field; the plugin therefore does not claim
-to remove server-owned shell/environment schemas when the server chooses to
-register them. It keeps the read-only, no-network sandbox and declines
-unexpected approval requests. `harness_mode=codex` leaves the server's native
-base instructions/configuration in place for coding-agent use.
-
-The repeatable `scripts/benchmark_prompt_overhead.py` sends only `hi` on
-ephemeral threads and reads the real `thread/tokenUsage/updated` totals. It
-reports client-declared dynamic-tool bytes separately because the App Server
-does not provide a built-in tool-schema listing RPC. Use `--only C` or
-`--only D` to isolate the optimized variants, and keep the benchmark on an
-isolated Codex App Server process rather than treating local historical Usage
-records as A/B data.
-
-## Files
-
-- `main.py`: AstrBot Star, lifecycle, and `/gpt` command group.
-- `agent_provider.py`: thin Provider adapter registered as `chatgpt_codex`.
-- `codex_service.py`: auth, model catalog, thread mapping, turn streaming, policy controls.
-- `codex_rpc.py`: concurrent async JSONL RPC client with pending futures and notifications.
-- `process_manager.py`: isolated `CODEX_HOME`, process supervision, stderr logging, restart backoff.
-- `session_store.py`: SQLite mapping from AstrBot unified session to Codex thread.
-- `model_catalog.py`: server response parsing and non-secret model cache.
-- `tool_bridge.py`: disabled extension point for future AstrBot tool schemas.
-- `harness.py`: lightweight base-instruction and thread capability policy.
-- `transport/`: direct Responses client, OAuth bridge, SSE parser, model/quota adapters, and transport types.
-- `scripts/benchmark_prompt_overhead.py`: real App Server A/B overhead benchmark.
-- `codex_security.py` / `codex_errors.py`: redaction and error classification.
-
-## Cache and session behavior
-
-The provider uses AstrBot's supplied unified `session_id` as the conversation key. Normal chat turns never use a shared fallback. AstrBot's `Context.llm_generate()` helper does not always provide a session id for plugin-owned background calls, so those calls receive a unique ephemeral key and their local mapping is cleaned up after the request; they cannot share a normal user conversation. The unified AstrBot key is responsible for separating private chats and groups; the plugin persists that key to the Codex thread id in SQLite without storing prompt text.
-
-Within one app-server process, a mapped thread is used directly for later turns. `thread/resume` is sent only when a persisted mapping is first used after process/reconnect, not on every message. A mapping is rolled over when its deterministic prompt version changes, it is idle for the configured TTL, reaches the configured maximum age, reaches `max_thread_turns`, or Codex reports that resume is not possible. Defaults are 7 days idle, 30 days maximum age, and 100 completed turns; all are configurable.
-
-The stable prompt version hashes the normalized developer/system instructions,
-selected harness, thread-scoped Codex config, canonical tool schema, and static
-local-tools setting. Current user text, attachments, message ids, request ids,
-timestamps, latency, and retry state are not put into that hash or developer
-prompt. The first turn after a reset may include the required historical
-context bootstrap; later turns send only the new user turn because Codex owns
-the resumed thread history.
-
-Codex 0.146.0's generated app-server schema exposes `thread/tokenUsage/updated` with `threadId`, `turnId`, and `tokenUsage.last` / `tokenUsage.total` breakdowns. The plugin records only numeric usage fields, latest turn latency, reuse flag, and retry count for diagnostics; it never records the full prompt. `last_usage` and `last_turn` in `/gpt status` are unavailable until the current runtime emits the notification. `cachedInputTokens` is stored as an input breakdown and is never added again to the server-provided `totalTokens`.
-
-## Install and configure
-
-1. Install a current Codex CLI binary on the AstrBot host. The recommended `transport` backend uses the same Codex OAuth `CODEX_HOME` and does not launch App Server for inference, but the first ChatGPT OAuth/Device Code login still uses the official `codex app-server` login RPC. `app_server` starts `codex app-server` with the current default stdio transport; the plugin deliberately does not pass the removed legacy `--stdio` flag. Set `codex_path` to an absolute executable path when `codex` is not on `PATH`.
-2. Copy this directory into `<AstrBot root>/data/plugins/astrbot_plugin_chatgpt_codex` or install its zip through AstrBot's plugin manager.
-3. Restart or reload AstrBot. In the model-provider settings, enable the `ChatGPT Codex Subscription` provider and select it for the target conversation. No OpenAI API key is required by this plugin.
-4. Open the installed plugin's `account` page in AstrBot WebUI. Choose browser OAuth or device code, then click `使用 ChatGPT 登录`. For browser OAuth, open the one-time authorization URL. If it does not complete automatically after the browser lands on a `http://localhost:.../auth/callback?...` address (common when the browser is not on the AstrBot host), copy that **entire callback address** from the browser address bar into the page's `提交 localhost 回调` field. The authenticated plugin page forwards it once to the local Codex App Server listener on the AstrBot host. The callback is immediately cleared, is not persisted or logged, and is only accepted for the exact listener port generated by the active login. Polling stops after the account is reported as logged in.
-5. Use that same page for status, logout, model refresh, and quota. The `/gpt ...` commands remain administrator-only fallbacks for headless or remote deployments.
-
-The authenticated `account` page is the profile-style overview: account identity, plan, current quota window, reset countdown, quota-activity visualization, server models, and safe runtime status. The separate `settings` tab includes the `backend_mode` selector (`transport` recommended, `app_server` stable fallback, `auto`), the `use_system_proxy` switch, and an optional explicit `transport_proxy` field alongside the Chinese settings form. It reads the current plugin configuration on entry and saves validated settings through the plugin Web API. System proxy variables are inherited by Transport and App Server login; an explicit proxy overrides them. In Docker, pass `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` into the container, because the host desktop proxy is not automatically visible inside it.
-
-The quota activity grid is intentionally an aggregate current-window visualization, not fabricated historical daily Token data: the Codex App Server rate-limit API currently exposes rolling windows rather than a contribution-history feed. The account profile accepts a future public HTTPS avatar field when the server provides one, but the current official `account/read` schema only defines account type, email, and plan, so the UI safely falls back to an initial avatar instead of querying ChatGPT web/private endpoints.
-
-The plugin stores its data in `data/plugin_data/astrbot_plugin_chatgpt_codex/`. Codex owns the credential files under that directory's `CODEX_HOME`; the plugin never opens, parses, logs, or copies those files. On Linux, the directory is created with mode `0700` when possible. Keep the AstrBot service account's data directory private and do not put it on a shared volume.
-
-## Commands
-
-WebUI is the primary management surface: AstrBot Dashboard → Plugins → `ChatGPT Codex Subscription` → `account`. Login, logout, status, model refresh, and quota are exposed there through authenticated plugin APIs. The commands below are retained for headless operation and diagnostics.
-
-`/gpt status` shows process health, non-secret account metadata, selected model/effort, and cache count.
-
-`/gpt login` and `/gpt logout` are administrator-only. `login_mode` selects `browser` or `device_code`.
-
-`/gpt models` refreshes and prints the current `model/list` catalog, including each model's advertised reasoning efforts.
-
-`/gpt model <id>` and `/gpt effort <level>` are administrator-only. `auto` leaves the server's default selection in place.
-
-`/gpt harness lightweight|codex` switches the thread-level base-instruction
-policy for new or rotated threads. `/gpt prompt-debug` is administrator-only
-and returns only lengths, fingerprints, mode, and the last redacted context
-diagnostics; it never prints raw persona text, history, credentials, or hidden
-reasoning.
-
-`/gpt quota` calls `account/rateLimits/read`. Quota/usage errors are surfaced as a terminal error; the plugin does not retry them indefinitely.
-
-`/gpt benchmark transport` runs one explicit real `hello` request through direct transport and reports latency plus the server-returned usage. `/gpt benchmark app_server` does the same through the existing App Server path. These commands are administrator-only and are never run automatically.
-
-## Usage Tracking
-
-The Usage tab and `/gpt usage` are a local aggregate, deliberately separate from `/gpt quota`:
-
-- Official account limits come from `account/rateLimits/read` and are shown as rate-limit windows and reset times.
-- In `transport` mode, direct responses expose only the rate-limit headers returned on the Responses stream; if the service returns none, the UI reports that no direct header snapshot is available rather than inventing an account window. App Server remains the authoritative quota source when `app_server` is selected.
-- Direct transport records `response.completed.usage` as a per-request usage record. It does not convert prompt length or context-window size into token estimates.
-- Local token usage is collected only after this plugin is installed and a completed Codex turn emits `thread/tokenUsage/updated`. The current protocol fields used are `tokenUsage.last.inputTokens`, `cachedInputTokens`, `outputTokens`, `reasoningOutputTokens`, and the authoritative `totalTokens`, together with the notification's `threadId` and `turnId`.
-- `tokenUsage.total` is a cumulative thread/session snapshot; each completed turn is persisted as a field-by-field delta from the previous snapshot. `tokenUsage.last` is the latest active-context snapshot and is used only for context diagnostics. A unique SQLite `turn_id` plus a durable `usage_snapshots` baseline prevents duplicate accounting after reconnects, resume replay, or process restarts.
-- Cached input is a subset of input, and reasoning output is a breakdown of output. Neither is added on top of the server-provided `totalTokens`. If one cumulative field moves backwards, that field is treated as a counter reset and the current value starts a new non-negative delta.
-- Records are stored at `data/plugin_data/astrbot_plugin_chatgpt_codex/usage.db` with a hashed conversation ID, UTC timestamp, configured local date, model, selected effort, numeric token deltas, context size, and request count. Prompts, responses, credentials, cookies, and raw events are not stored. Existing v1 records are moved to `usage_records_legacy_v1` during schema migration and are not silently mixed into the corrected totals.
-- Reasoning counts remain `Unavailable` when the server does not provide `reasoningOutputTokens`; the plugin never estimates tokens from text, context windows, or rate-limit percentages.
-
-The current installed Codex executable exposes the `GetAccountTokenUsageResponse` schema in generated protocol output, but does not expose a callable account-token-usage request/params entry. Therefore the dashboard does not fabricate historical account usage: its daily heatmap is based on the locally observed turn events. A future Codex release can add a separate official history adapter without changing the local schema.
-
-Settings include `usage_timezone` (default `Asia/Shanghai`), `usage_retention_days` (default `365`, or `0` for forever), and `usage_debug` (default `false`). Heatmap levels are adaptive P20/P40/P60/P80 levels over the visible date range; tooltips retain exact values. The overview also shows recent per-turn numeric usage and context-window diagnostics without exposing identifiers, prompts, responses, or hidden reasoning.
-
-`/gpt usage debug` is an administrator-only redacted diagnostic command. It reports the accounting source, snapshot/delta semantics, counter-reset flags, schema version, and recent numeric events. `/gpt usage reset` clears corrected v2 records, baselines, and diagnostics while preserving the legacy v1 table for audit.
-
-`/gpt reset` removes the current AstrBot-to-Codex thread mapping. The next message starts a fresh Codex thread.
-
-## Security defaults
-
-The default configuration has `backend_mode=transport`, `harness_mode=lightweight`, `tool_router=minimal`, and `enable_local_codex_tools=false`. Direct transport has no Codex local capability surface at all; only the AstrBot-selected function schemas are sent, and execution remains with AstrBot. When `app_server` is selected, threads use a read-only sandbox, no sandbox network access, and declined unexpected approvals. Optional Codex prompt sources and MCP/apps are disabled by the lightweight thread config. Raw reasoning events, raw command text, file diffs, MCP payloads, and internal state are not rendered or written to logs.
-
-Only public assistant-message deltas and, when explicitly enabled, generic status labels such as `[fileChange started]` are exposed. A status label never includes a command, path, tool argument, result, or hidden reasoning.
-
-## Validation
-
-From this plugin directory:
+如果确实需要原生 Codex coding-agent 行为，可以切换：
 
 ```text
-python -m pytest
-python -m compileall -q .
+harness_mode = codex
+```
+
+---
+
+## 📊 Usage 与热力图
+
+插件会把 **服务端真实返回的 usage** 写入本地 SQLite，而不是根据字符数或上下文长度估算 Token。
+
+### 统计字段
+
+| 字段 | 含义 |
+| --- | --- |
+| Input | 服务端返回的输入 Token |
+| Cached input | Input 中命中缓存的子集 |
+| Output | 输出 Token |
+| Reasoning | Output 的 reasoning 分项 |
+| Processed total | 服务端总 Token；不会额外重复加 Cached / Reasoning |
+| Requests | 本地记录到的请求数量 |
+| Cache ratio | `cached_input_tokens / input_tokens` |
+
+> [!NOTE]
+> `Cached input` 是 `Input` 的子集；`Reasoning` 是输出记账中的分项。它们不会再次叠加到 `Processed total`。
+
+### 年度活动热力图
+
+概览页会读取最长 365 天的按日 Usage，并渲染为 52 周活动网格：
+
+```text
+            Jan       Feb       Mar                    Aug
+Mon         ■ ■       ■ ■ ■     ■                      ■ ■
+Wed       ■ ■ ■       ■ ■       ■ ■                  ■ ■ ■
+Fri         ■         ■ ■ ■       ■                    ■
+
+          Less  ▫ ▪ ▪ ▪ ■  More
+```
+
+WebUI 支持：
+
+- Daily：按日 Token；
+- Weekly：同一周按周总量着色；
+- Cumulative：窗口内累计 Token；
+- 未来日期忽略；
+- 缺失日期补零；
+- 重复日期累计；
+- 颜色等级相对于当前显示窗口峰值动态量化。
+
+本地 Usage 与官方配额是 **两个不同数据源**：
+
+```mermaid
+flowchart LR
+    R[Codex Responses / App Server] -->|真实 usage| L[(本地 usage.db)]
+    L --> U[Usage 统计 / 热力图 / 最近请求]
+
+    S[Codex 账号服务] -->|Rate Limit Window| Q[官方配额卡片]
+
+    U -. 统计口径不同 .- Q
+```
+
+因此两者出现差异是正常的，账号剩余额度应以服务端配额为准。
+
+---
+
+## 🧠 会话与上下文
+
+插件将 AstrBot 的统一会话标识映射为独立 Codex thread / session 状态：
+
+- 同一会话内请求串行；
+- 不同会话允许并行；
+- 无 `session_id` 的插件后台调用使用一次性临时会话键，不与普通聊天共享状态；
+- 支持 `max_thread_turns`、`thread_idle_ttl`、`thread_max_age` 自动轮换；
+- `/gpt reset` 可手动重置当前会话状态。
+
+持久化数据示意：
+
+```text
+data/plugin_data/astrbot_plugin_chatgpt_codex/
+├── CODEX_HOME/            # 独立 ChatGPT Codex 登录态
+├── models.json            # 服务端模型目录缓存
+├── runtime_settings.json  # 当前模型 / effort / onboarding 状态
+├── sessions.sqlite3       # AstrBot 会话映射
+└── usage.db               # 本地 Token Usage
+```
+
+---
+
+## 🛠️ AstrBot 工具与多模态
+
+Provider 声明支持：
+
+```text
+text / image / audio / tool_use
+```
+
+### 工具调用
+
+Transport 返回 Function Call 时，插件将名称、参数和 Call ID 转换成 AstrBot `LLMResponse`，由 AstrBot Agent Runner 继续执行工具并把 Tool Result 带入下一轮。
+
+这意味着：
+
+- AstrBot 工具仍然由 AstrBot 控制；
+- 插件不会自行执行未知本机命令；
+- 工具调用历史和 opaque reasoning signature 会在需要时保留给后续 Responses 请求。
+
+### 多模态
+
+- 图片 → 转换为当前 Codex 协议的 `input_image`；
+- 音频 → 转换为 `input_audio`；
+- 回复 / 引用 → 保留为引用文本；
+- 当前协议没有通用文件 / 视频 ContentItem 时 → 转为简短附件标记，不静默丢弃用户输入。
+
+---
+
+## 🔒 安全边界
+
+默认安全策略：
+
+| 能力 | 默认状态 |
+| --- | --- |
+| Codex 本机 shell | ❌ 关闭 |
+| 文件系统写入 | ❌ 关闭 |
+| Codex MCP | ❌ 关闭 |
+| Browser / Computer Control | ❌ 关闭 |
+| 本机 Codex Tools | ❌ `enable_local_codex_tools = false` |
+| 隐藏思维链输出 | ❌ 不暴露 |
+| Token / Cookie 普通日志 | ❌ 不记录 |
+| 原始 OAuth URL 普通日志 | ❌ 不记录 |
+
+插件会对用户可见错误与诊断信息执行脱敏。会话 ID 在 Usage 中使用 SHA-256 哈希保存，调试输出中的 thread / turn ID 也会掩码处理。
+
+> [!CAUTION]
+> `enable_local_codex_tools` 会扩大 AstrBot 进程可接触的本机能力面。除非你明确理解风险，否则保持关闭；如需测试，建议使用隔离环境。
+
+---
+
+## 🖥️ WebUI
+
+插件提供两个主要页面：
+
+### 概览
+
+- ChatGPT 登录 / 退出；
+- 当前账号与套餐；
+- 5 小时 / 7 天等官方配额窗口；
+- 当前后端与运行状态；
+- 服务端模型；
+- 今日 / 7 日 / 30 日本地 Usage；
+- 缓存命中统计；
+- 52 周 Token 活动热力图；
+- 最近请求明细。
+
+### 设置
+
+- Codex CLI 路径；
+- Backend Mode；
+- OAuth / Device Code；
+- Transport Proxy；
+- 默认模型与 reasoning effort；
+- Harness；
+- Tool Router；
+- 并发 / 超时；
+- Thread 生命周期；
+- Usage 时区与保留天数；
+- 本机工具安全开关。
+
+---
+
+## ⚙️ 常用配置
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `codex_path` | `codex` | Codex 可执行文件名或绝对路径 |
+| `backend_mode` | `transport` | `transport` / `app_server` / `auto` |
+| `transport_proxy` | 空 | 显式代理地址，优先于系统代理 |
+| `use_system_proxy` | `true` | 继承 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` |
+| `login_mode` | `browser` | `browser` / `device_code` |
+| `default_model` | `auto` | 服务端模型 ID；`auto` 自动选择 |
+| `reasoning_effort` | `auto` | 模型支持的 reasoning effort |
+| `harness_mode` | `lightweight` | `lightweight` / `codex` |
+| `tool_router` | `minimal` | `none` / `minimal` / `all` |
+| `streaming` | `true` | 启用流式 Provider 调用 |
+| `max_concurrent_turns` | `2` | 全局最大并发 turn |
+| `turn_timeout` | `600` | 单次请求超时，秒 |
+| `enable_local_codex_tools` | `false` | 是否允许 Codex 本机工具 |
+| `usage_timezone` | `Asia/Shanghai` | Usage 自然日 IANA 时区 |
+| `usage_retention_days` | `365` | Usage 记录保留天数；`0` 永久保留 |
+
+<details>
+<summary><b>展开全部高级配置</b></summary>
+
+| 配置项 | 默认值 | 范围 / 说明 |
+| --- | --- | --- |
+| `show_tool_status` | `false` | 是否显示安全的公开工具状态标签 |
+| `max_thread_turns` | `100` | `0` 关闭按完成 turn 数轮换 |
+| `thread_idle_ttl` | `604800` | thread 空闲轮换时间，默认 7 天 |
+| `thread_max_age` | `2592000` | thread 最大年龄，默认 30 天 |
+| `force_http_transport` | `true` | 强制 ChatGPT 流量使用 HTTPS，避免 WebSocket 回退延迟 |
+| `usage_debug` | `false` | 记录脱敏的数值 Usage 诊断，不记录 Prompt / Reply / Token |
+
+</details>
+
+模型列表与可用 reasoning effort 以当前账号的服务端返回为准。
+
+---
+
+## 💬 管理命令
+
+```text
+/gpt status
+/gpt login
+/gpt logout
+/gpt models
+/gpt model <id>
+/gpt effort <level>
+/gpt harness <lightweight|codex>
+/gpt prompt-debug
+/gpt quota
+/gpt benchmark <transport|app_server>
+/gpt usage [today|7d|30d|...]
+/gpt usage debug
+/gpt usage reset
+/gpt reset
+```
+
+其中登录、退出登录、模型 / effort / harness 设置、benchmark、Usage 重置等敏感操作会按插件实现限制管理员权限。
+
+`/gpt benchmark` 会发送一次真实请求，因此 **会产生实际用量**；它不会在启动时自动运行。
+
+---
+
+## 🌐 网络与代理
+
+默认情况下插件可以继承 AstrBot 进程中的：
+
+```text
+HTTP_PROXY
+HTTPS_PROXY
+ALL_PROXY
+```
+
+也可通过：
+
+```text
+transport_proxy = http://127.0.0.1:7890
+```
+
+显式指定代理；显式配置优先级更高。
+
+同一代理规则会用于：
+
+- Browser OAuth token exchange；
+- Device Code；
+- Responses Transport；
+- Codex App Server 相关网络访问。
+
+不要在代理 URL 中写入用户名或密码。
+
+---
+
+## 📁 项目结构
+
+```text
+astrbot_plugin_chatgpt_codex/
+├── main.py                 # AstrBot 插件入口、命令、Web API
+├── agent_provider.py       # AstrBot Provider Adapter
+├── codex_service.py        # 核心编排：认证、模型、后端、会话、Usage
+├── codex_rpc.py            # App Server JSONL RPC
+├── process_manager.py      # codex app-server 生命周期
+├── session_store.py        # 会话持久化
+├── model_catalog.py        # 服务端模型目录
+├── harness.py              # Lightweight / Codex Harness 策略
+├── tool_bridge.py          # 工具桥接
+├── codex_security.py       # 错误与敏感信息脱敏
+├── transport/
+│   ├── auth.py             # CODEX_HOME OAuth 登录态读取 / 刷新
+│   ├── client.py           # Responses HTTP/SSE 客户端
+│   ├── responses.py        # 请求 / SSE / 多模态 / Function Call 转换
+│   ├── quota.py            # Rate Limit 解析
+│   └── types.py            # Transport 类型与错误
+├── usage/
+│   ├── collector.py        # Usage 采集
+│   ├── storage.py          # SQLite 存储
+│   ├── aggregate.py        # 聚合 / Cache Ratio / Heat Level
+│   ├── service.py          # Summary / Daily / Model / Recent Turns
+│   └── models.py           # Token Usage 数据模型
+├── pages/
+│   ├── account/index.html  # 概览 / 登录 / 配额 / Usage 热力图
+│   └── settings/index.html # 设置页
+├── tests/                  # 单元测试
+├── scripts/
+│   └── benchmark_prompt_overhead.py
+├── _conf_schema.json       # AstrBot 插件配置 Schema
+└── metadata.yaml           # 插件元数据
+```
+
+---
+
+## ❓ 常见问题
+
+### `No such file or directory: 'codex'`
+
+运行 AstrBot 的用户 / 容器无法找到 Codex CLI。先在 **同一运行环境** 中执行：
+
+```bash
+codex --version
+```
+
+若命令存在但 AstrBot PATH 不同，在插件中填写 `codex_path` 绝对路径。
+
+### OAuth 最后跳转 `localhost`，但服务器没有登录成功
+
+远程服务器场景下，浏览器的 `localhost` 是你当前电脑，不是服务器。复制浏览器地址栏的 **完整 callback URL** 回插件 WebUI 提交即可。
+
+### Transport 请求失败或很慢
+
+依次检查：
+
+1. AstrBot 进程是否能访问外网；
+2. 系统代理是否真正传入 AstrBot / Docker；
+3. `transport_proxy` 是否使用了容器可访问地址；
+4. 尝试将 `backend_mode` 改为 `app_server`；
+5. 若希望自动回退，使用 `auto`。
+
+### Usage 为什么是 0 / Unavailable？
+
+插件只记录服务端真实返回的 usage。没有 usage 的历史请求不会根据字符数补算，也不会伪造 Token 数。
+
+### 本地 Usage 为什么和账号配额对不上？
+
+二者统计来源不同：本地 Usage 是插件观察到的请求，官方配额是账号服务端窗口。时间范围、刷新时机和记账口径均可能不同。
+
+### 为什么 Plus 账号不能当 API Key 用？
+
+因为 ChatGPT 订阅与 OpenAI API 是两套独立产品。本插件只桥接当前 ChatGPT 账号实际拥有的 Codex 能力，不提供 API 余额转换。
+
+---
+
+## 🧪 开发与测试
+
+```bash
+python -m pytest -q
 ruff check .
+python -m compileall -q .
+git diff --check
 ```
 
-The tests are protocol-level tests and do not require a Codex binary or a live ChatGPT login. A live smoke test should be performed on the target AstrBot host after installing a current Codex binary: `/gpt login` -> `/gpt status` -> `/gpt models` -> one short message -> `/gpt quota`.
+Prompt 开销基准工具：
 
-## Known limitations and next steps
+```bash
+python scripts/benchmark_prompt_overhead.py --help
+```
 
-- App Server mode still buffers Codex text until `item/completed`/`turn/completed` and then emits one authoritative answer. Transport mode parses Responses SSE deltas and emits them progressively, then emits one completed terminal response for AstrBot's Agent Runner without rendering the answer a second time.
-- App Server mode now forwards AstrBot image and audio inputs as the official inline or local `turn/start` variants. Direct Transport mode forwards Codex `input_image` and `input_audio` content items. AstrBot reply/quote metadata is kept as quoted text. The current Codex protocol has no generic file or video `ContentItem`, so those platform attachments are preserved as short, user-visible attachment markers instead of being silently dropped; a future file-capable protocol can replace this adapter without changing the provider boundary.
-- Transport mode forwards AstrBot function schemas and returns tool calls to AstrBot's Agent Runner; tool results, structured function-call history, image inputs, and opaque Responses reasoning state are preserved across the next request. The plugin still does not execute a second transport-side Agent Loop. App Server mode continues to keep the Codex loop isolated and does not receive AstrBot tools.
-- Codex executable availability, ChatGPT plan entitlements, regional access, quota behavior, and protocol details are external runtime dependencies. The model catalog and errors must be checked on the target machine.
-- Provider selection still uses AstrBot's Provider registry because that is the stable plugin integration point. Transport mode bypasses Codex Agent Harness; App Server mode retains it for compatibility.
+测试覆盖认证安全、Provider、缓存优化、Harness、模型目录、OAuth、进程管理、RPC、Transport、会话、Usage 等核心模块。
+
+---
+
+## ⚠️ Beta 状态
+
+当前版本：**`v0.3.0-beta.2`**。
+
+需要注意：
+
+- Responses Transport 依赖当前 Codex 客户端 / 服务端协议形状，未来可能随上游变化；
+- `app_server` 保留作为兼容回退；
+- Transport 工具循环仍由 AstrBot Agent Runner 负责；
+- 插件不能增加、绕过或修改账号官方配额；
+- 账号实际开放的模型与 reasoning effort 始终以服务端为准。
+
+---
+
+## 🐛 反馈
+
+项目地址：<https://github.com/longzhou23/astrbot_plugin_chatgpt_codex>
+
+提交 Issue 时建议附上：
+
+- AstrBot 版本；
+- Codex CLI 版本；
+- 插件版本；
+- `backend_mode`；
+- 脱敏后的错误日志；
+- 能稳定复现问题的最小步骤。
+
+**请勿提交：** Access Token、Refresh Token、Cookie、完整 OAuth Callback URL、`CODEX_HOME/auth.json` 或其他个人凭据。
+
+---
+
+<div align="center">
+
+**ChatGPT account → Codex → AstrBot，尽量少一层，尽量保持原生。**
+
+</div>
