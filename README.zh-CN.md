@@ -5,10 +5,10 @@
 **在 AstrBot 中直接使用当前 ChatGPT 账号可用的 Codex 模型。**<br>
 基于官方 Codex 登录能力，提供轻量 Responses Transport、Codex App Server 回退、模型发现、配额读取、本地 Usage 统计与 AstrBot 原生工具调用桥接。
 
-[![Version](https://img.shields.io/badge/version-v0.3.0--beta.2-orange)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex/releases)
+[![Version](https://img.shields.io/badge/version-v1.0.0-blue)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex/releases)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D%204.13.0-blue)](https://github.com/AstrBotDevs/AstrBot)
 [![Codex](https://img.shields.io/badge/backend-OpenAI%20Codex-black)](https://github.com/openai/codex)
-[![Status](https://img.shields.io/badge/status-Beta-yellow)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex)
+[![Status](https://img.shields.io/badge/status-Stable-brightgreen)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex)
 
 </div>
 
@@ -144,7 +144,7 @@ codex --version
 ### 2. 安装插件
 
 ```bash
-git clone --branch v0.3.0-beta.2 --depth 1 \
+git clone --branch v1.0.0 --depth 1 \
   https://github.com/longzhou23/astrbot_plugin_chatgpt_codex.git
 ```
 
@@ -640,9 +640,9 @@ python scripts/benchmark_prompt_overhead.py --help
 
 ---
 
-## ⚠️ Beta 状态
+## ✅ 正式版状态
 
-当前版本：**`v0.3.0-beta.2`**。
+当前版本：**`v1.0.0`**。
 
 需要注意：
 
