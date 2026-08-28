@@ -20,6 +20,7 @@ tags.
 - 按 OpenDesign 最新前端稿原样同步概览与设置页面，不在移植阶段增加额外界面元素。
 - 按 `Website-Clone.zip` 提供的新版账户概览与设置页面更新前端，仅补充插件桥接脚本和实际 WebUI 路由。
 - 修复插件页面内的概览、设置导航，普通左键点击现在会正确切换宿主 AstrBot WebUI 页面，同时保留新标签页打开行为。
+- 修复设置页首次加载时缺少主题属性导致的白屏，页面现在会先以暗色主题渲染，再应用已保存的主题偏好。
 - 修复非流式 Agent Runner 丢失 Responses function call 的问题；搜索、表情包和星图
   工具现在可以正常进入 AstrBot 的工具循环，不再被误判为空回复。
 - 对历史上下文中的重复图片和音频做去重，避免重复发送同一张表情包或天文图片。
@@ -37,6 +38,8 @@ tags.
   the plugin bridge script and deployed WebUI routes were added for integration.
 - Fixed overview/settings navigation inside the plugin page so a normal left click
   switches the host AstrBot WebUI page while new-tab behavior remains available.
+- Fixed the settings page white flash caused by a missing initial theme attribute;
+  it now renders dark first and then applies the saved theme preference.
 - Fixed non-streaming Agent Runner calls dropping Responses function calls; search,
   sticker, and star-field tools now reach AstrBot's tool loop instead of becoming
   empty assistant messages.
