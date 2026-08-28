@@ -1,77 +1,371 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Codex 设置</title>
-  <script src="/api/plugin/page/bridge-sdk.js"></script>
-  <style>
-    :root{color-scheme:light dark;--bg:#fff;--surface:#fff;--subtle:#f7f8fa;--text:#111318;--muted:#5d6470;--quiet:#858c98;--line:#dfe3e8;--line-strong:#c9cfd7;--blue:#1863dc;--blue-hover:#0f55c5;--blue-soft:#edf4ff;--success:#137a45;--success-soft:#ecf8f0;--danger:#b42334;--danger-soft:#fff1f2;--warning:#8a6200;--warning-soft:#fff8e7;--radius:6px;--gutter:32px;--focus:0 0 0 3px color-mix(in srgb,var(--blue) 24%,transparent);--font:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","Noto Sans SC",Arial,sans-serif}
-    :root[data-theme="dark"]{color-scheme:dark;--bg:#111318;--surface:#181b21;--subtle:#20242b;--text:#f1f4f8;--muted:#b0b8c4;--quiet:#8993a1;--line:#303640;--line-strong:#454d59;--blue:#66a0ff;--blue-hover:#8bb8ff;--blue-soft:#172945;--success:#5dc58b;--success-soft:#142c20;--danger:#ff9da8;--danger-soft:#351b22;--warning:#e5bc58;--warning-soft:#332a15}
-    *{box-sizing:border-box}html{background:var(--bg)}body,button,input,select{font-family:var(--font)}body{min-width:320px;margin:0;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}button,input,select{font-size:inherit}button{cursor:pointer}button:disabled{cursor:wait;opacity:.58}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:0;box-shadow:var(--focus)}a{color:inherit;text-decoration:none}
-    .shell{width:min(calc(100% - (var(--gutter) * 2)),1180px);margin:auto;padding:24px 0 72px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:48px;border-bottom:1px solid var(--line)}.wordmark{font-size:19px;font-weight:700;letter-spacing:-.03em;white-space:nowrap}.wordmark span{color:var(--blue);font-weight:600}.nav,.nav-links{display:flex;align-items:center}.nav{gap:20px;min-width:0}.nav-links{gap:16px}.nav a,.theme-toggle{min-height:34px;padding:7px 0 6px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-size:13px;white-space:nowrap}.nav a:hover,.theme-toggle:hover{color:var(--blue)}.nav a.active{border-bottom-color:var(--blue);color:var(--text);font-weight:600}.theme-toggle{padding-inline:2px}
-    .page-head{display:flex;align-items:end;justify-content:space-between;gap:24px;padding:40px 0 28px}.eyebrow{margin:0 0 8px;color:var(--quiet);font-size:11px;font-weight:700;letter-spacing:.08em}h1,h2,p{margin-top:0}h1{margin-bottom:8px;font-size:clamp(30px,4vw,42px);line-height:1.08;letter-spacing:-.04em}.page-head p{max-width:680px;margin-bottom:0;color:var(--muted)}.load-state{display:inline-flex;align-items:center;min-height:29px;border:1px solid var(--line);border-radius:var(--radius);padding:4px 9px;background:var(--surface);color:var(--muted);font-size:12px;white-space:nowrap}.load-state:before{width:7px;height:7px;margin-right:7px;border-radius:50%;background:currentColor;content:""}.load-state.ok{border-color:color-mix(in srgb,var(--success) 36%,var(--line));background:var(--success-soft);color:var(--success)}.load-state.error{border-color:color-mix(in srgb,var(--danger) 42%,var(--line));background:var(--danger-soft);color:var(--danger)}
-    .settings-form{display:grid;gap:16px}.section{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:var(--surface)}.section-header{display:flex;align-items:start;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid var(--line);background:var(--subtle)}.section-index{display:block;margin-bottom:5px;color:var(--blue);font-size:11px;font-weight:700;letter-spacing:.08em}.section h2{margin:0;font-size:17px;letter-spacing:-.02em}.section-header p{max-width:660px;margin:5px 0 0;color:var(--muted);font-size:13px}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.field{min-width:0;padding:20px 24px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}.field:nth-child(even){border-right:0}.field:nth-last-child(-n+2){border-bottom:0}.field.wide{grid-column:1/-1;border-right:0}.field.wide:last-child{border-bottom:0}.field label:not(.check-label){display:block;margin-bottom:8px;font-weight:650}.field small{display:block;margin-top:7px;color:var(--muted);font-size:12px;line-height:1.55}input[type="text"],input[type="number"],select{width:100%;min-height:40px;border:1px solid var(--line-strong);border-radius:var(--radius);padding:8px 10px;background:var(--bg);color:var(--text);transition:border-color 140ms ease,box-shadow 140ms ease}input:hover,select:hover{border-color:var(--blue)}input:focus,select:focus{border-color:var(--blue);outline:0;box-shadow:var(--focus)}.check-label{display:flex;align-items:center;gap:10px;min-height:40px;font-weight:650;cursor:pointer}input[type="checkbox"]{width:17px;height:17px;margin:0;accent-color:var(--blue)}
-    .toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid var(--line)}.toggle{min-width:0;padding:17px 24px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}.toggle:nth-child(even){border-right:0}.toggle:nth-last-child(-n+2){border-bottom:0}.toggle small{display:block;margin:2px 0 0 27px;color:var(--muted);font-size:12px;line-height:1.55}.notice{display:flex;gap:10px;border:1px solid color-mix(in srgb,var(--warning) 38%,var(--line));border-left:3px solid var(--warning);border-radius:var(--radius);padding:14px 16px;background:var(--warning-soft);color:var(--muted);font-size:13px;line-height:1.6}.notice strong{color:var(--text);white-space:nowrap}.form-footer{position:sticky;bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid var(--line-strong);border-radius:8px;padding:12px 14px 12px 18px;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(8px)}.hint{min-width:0;color:var(--muted);font-size:13px}.button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;border:1px solid var(--line-strong);border-radius:var(--radius);padding:8px 14px;background:var(--surface);color:var(--text);font-weight:650;line-height:1.2;transition:background 140ms ease,border-color 140ms ease,color 140ms ease;white-space:nowrap}.button:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}.button.primary{border-color:var(--blue);background:var(--blue);color:#fff}.button.primary:hover:not(:disabled){border-color:var(--blue-hover);background:var(--blue-hover);color:#fff}.message{min-height:20px;margin:0;color:var(--muted);font-size:13px}.message:empty{display:none}.message.success{color:var(--success)}.message.error{color:var(--danger)}.privacy{margin-top:28px;border-top:1px solid var(--line);padding-top:16px;color:var(--quiet);font-size:12px;line-height:1.6}
-    @media(max-width:1024px){:root{--gutter:24px}.page-head{padding-top:32px}}@media(max-width:820px){.field{padding:18px 20px}.section-header{padding:18px 20px}.toggle{padding:16px 20px}}@media(max-width:768px){.page-head{align-items:start;flex-direction:column;gap:16px}.field-grid,.toggle-grid{grid-template-columns:1fr}.field,.field:nth-child(even),.toggle,.toggle:nth-child(even){border-right:0}.field:nth-last-child(-n+2),.toggle:nth-last-child(-n+2){border-bottom:1px solid var(--line)}.field:last-child,.toggle:last-child{border-bottom:0}}@media(max-width:600px){:root{--gutter:16px}.shell{padding-top:16px;padding-bottom:40px}.topbar{align-items:start;flex-direction:column;gap:8px;padding-bottom:12px}.nav{width:100%;justify-content:space-between;gap:12px}.page-head{padding:28px 0 20px}h1{font-size:32px}.section-header{padding:16px}.section-header p{font-size:12px}.field{padding:16px}.toggle{padding:14px 16px}.form-footer{align-items:stretch;flex-direction:column;bottom:8px;padding:12px}.form-footer .button{width:100%}.notice{align-items:start;flex-direction:column}}@media(max-width:390px){.nav{align-items:start;flex-direction:column}.theme-toggle{padding-left:0}.load-state{white-space:normal}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important}}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codex 设置</title>
+<script src="/api/plugin/page/bridge-sdk.js"></script>
+<style>
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#000000;
+  --ink-rgb:226 232 240;
+  --surface:rgb(22 28 39);
+  --surface-muted:#1b2430;
+  --surface-soft:#19222e;
+  --surface-sunken:#111823;
+  --text:#e6edf3;
+  --heading:#f0f6fc;
+  --muted:rgb(var(--ink-rgb) / .72);
+  --muted2:rgb(var(--ink-rgb) / .5);
+  --control-bg:#dbe7f0;
+  --control-on:#0d1117;
+  --accent:#79c0ff;
+  --accent2:#58a6ff;
+  --danger:#ff7b72;
+  --success:#56d364;
+  --warning:#ffa657;
+  --border-muted:rgb(var(--ink-rgb) / .07);
+  --border-subtle:rgb(var(--ink-rgb) / .11);
+  --border-hover:rgb(var(--ink-rgb) / .2);
+  --border-focus:rgb(var(--ink-rgb) / .28);
+  --highlight:rgb(var(--ink-rgb) / .075);
+  --highlight-strong:rgb(var(--ink-rgb) / .12);
+  --shadow-rgb:0 0 0;
+  --menu-shadow:0 16px 42px rgb(var(--shadow-rgb) / .36);
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f5f7fa;
+  --ink-rgb:15 23 42;
+  --surface:rgb(255 255 255);
+  --surface-muted:#f8fafc;
+  --surface-soft:#fbfcfd;
+  --surface-sunken:#f1f4f7;
+  --text:#0f172a;
+  --heading:#08111f;
+  --muted:rgb(var(--ink-rgb) / .66);
+  --muted2:rgb(var(--ink-rgb) / .48);
+  --control-bg:#111827;
+  --control-on:#ffffff;
+  --accent:#2479a7;
+  --accent2:#1d6b96;
+  --danger:#b42318;
+  --success:#15803d;
+  --warning:#c2410c;
+  --border-muted:rgb(var(--ink-rgb) / .05);
+  --border-subtle:rgb(var(--ink-rgb) / .075);
+  --border-hover:rgb(var(--ink-rgb) / .14);
+  --border-focus:rgb(var(--ink-rgb) / .2);
+  --highlight:rgb(var(--ink-rgb) / .055);
+  --highlight-strong:rgb(var(--ink-rgb) / .085);
+  --shadow-rgb:15 23 42;
+  --menu-shadow:0 12px 32px rgb(var(--shadow-rgb) / .08);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body,button,a,input,select,textarea{font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC","Outfit",system-ui,sans-serif}
+body{background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer}
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+[hidden]{display:none!important}
+
+/* ---- App bar ---- */
+.appbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px;height:56px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border-muted)}
+.brand{display:flex;align-items:center;gap:9px;font-family:"Outfit","PingFang SC",sans-serif;font-weight:600;font-size:17px;letter-spacing:-.01em;color:var(--heading);white-space:nowrap}
+.brand .dot{width:20px;height:20px;border-radius:6px;background:var(--accent);display:grid;place-items:center;color:var(--control-on);font-size:11px;font-weight:700}
+.brand span{color:var(--accent)}
+.appbar nav{display:flex;gap:4px;margin-left:6px}
+.appbar nav a{display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--muted)}
+.appbar nav a:hover{background:var(--highlight);color:var(--text)}
+.appbar nav a.active{color:var(--heading);background:var(--highlight-strong)}
+.appbar .spacer{flex:1}
+.theme-toggle{border:1px solid var(--border-subtle);border-radius:8px;background:transparent;color:var(--muted);height:34px;padding:0 12px;font-size:12px;font-weight:650}
+.theme-toggle:hover{background:var(--highlight);color:var(--text);border-color:var(--border-hover)}
+
+/* ---- Layout ---- */
+.page-section{max-width:1000px;margin:0 auto;padding:26px 20px 64px;display:flex;flex-direction:column;gap:16px}
+.preview-notice{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid var(--border-subtle);border-radius:12px;background:var(--surface-soft);color:var(--muted);font-size:12.5px;line-height:1.6}
+.preview-notice b{color:var(--heading)}
+.page-hero{display:flex;flex-direction:column;gap:8px}
+.page-hero h1{margin:0;font-family:"Outfit","PingFang SC",sans-serif;font-weight:600;font-size:26px;letter-spacing:-.02em;color:var(--heading)}
+.page-hero p{margin:0;color:var(--muted);font-size:13px;line-height:1.7;max-width:680px}
+
+/* ---- Cards ---- */
+.card{background:var(--surface);border:1px solid var(--border-subtle);border-radius:16px;padding:20px}
+.group-head{margin-bottom:18px}
+.group-head h2{margin:0;font-family:"Outfit","PingFang SC",sans-serif;font-weight:600;font-size:17px;letter-spacing:-.01em;color:var(--heading)}
+.group-head p{margin:5px 0 0;color:var(--muted);font-size:12.5px;line-height:1.6}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 20px}
+.field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.field-wide{grid-column:1/-1}
+.field label{font-size:13px;font-weight:600;color:var(--text)}
+.field .hint{color:var(--muted);font-size:12px;line-height:1.6}
+.field input[type="text"],.field input[type="number"],.field select{width:100%;height:40px;border:1px solid var(--border-subtle);border-radius:9px;background:var(--surface-sunken);color:var(--text);padding:0 12px;font:inherit;font-size:13px;transition:border-color .15s,box-shadow .15s}
+.field input::placeholder{color:var(--muted2)}
+.field select{cursor:pointer}
+.field input:focus,.field select:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.field input:disabled,.field select:disabled{opacity:.55;cursor:not-allowed}
+
+/* ---- Toggle switch ---- */
+.toggle-row{display:flex;align-items:flex-start;gap:11px;padding:12px 0;border-top:1px solid var(--border-muted)}
+.toggle-row:first-child{border-top:0}
+.form-grid .toggle-row{grid-column:1/-1}
+.toggle{position:relative;flex:none;width:38px;height:22px;margin-top:1px}
+.toggle input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.toggle .track{position:absolute;inset:0;border-radius:999px;background:var(--border-hover);transition:background .15s}
+.toggle .thumb{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgb(0 0 0 / .25);transition:left .15s}
+.toggle input:checked~.track{background:var(--accent)}
+.toggle input:checked~.thumb{left:18px}
+.toggle-body{min-width:0}
+.toggle-body strong{display:block;font-size:13px;font-weight:600;color:var(--text)}
+.toggle-body small{display:block;margin-top:3px;color:var(--muted);font-size:12px;line-height:1.6}
+
+/* ---- Warning + footer ---- */
+.warning{display:flex;align-items:flex-start;gap:9px;margin-top:6px;padding:12px 14px;border:1px solid color-mix(in srgb,var(--warning) 40%,var(--border-subtle));border-radius:10px;background:color-mix(in srgb,var(--warning) 8%,var(--surface-soft));color:var(--muted);font-size:12.5px;line-height:1.65}
+.warning b{color:var(--warning)}
+.form-footer{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.form-footer .hint{color:var(--muted);font-size:12.5px}
+
+/* ---- Buttons ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:0 16px;border:1px solid var(--border-subtle);border-radius:9px;background:var(--highlight);color:var(--text);font-size:13px;font-weight:600;white-space:nowrap;transition:background .15s,border-color .15s}
+.btn:hover{background:var(--highlight-strong);border-color:var(--border-hover)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.primary{background:var(--control-bg);color:var(--control-on);border-color:transparent}
+.btn.primary:hover{background:var(--control-on);color:var(--control-bg);border-color:transparent}
+
+/* ---- Message ---- */
+.message{min-height:20px;font-size:13px;color:var(--muted);line-height:1.5}
+.message.error{color:var(--danger)}
+.message.success{color:var(--success)}
+
+/* ---- Privacy ---- */
+.privacy{display:flex;align-items:flex-start;gap:9px;color:var(--muted);font-size:12px;line-height:1.6;padding:0 6px}
+.privacy b{color:var(--text)}
+
+@media(max-width:860px){
+  .form-grid{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .appbar{height:auto;flex-wrap:wrap;padding:10px 14px;gap:10px}
+  .appbar .spacer{display:none}
+  .appbar nav{order:3;width:100%;margin-left:0}
+  .appbar nav a{flex:1;justify-content:center}
+}
+</style>
 </head>
-<body>
-  <main class="shell" data-od-id="codex-settings-page">
-    <header class="topbar" data-od-id="top-navigation"><div class="wordmark">AstrBot <span>· Codex</span></div><nav class="nav" aria-label="插件页面导航" data-od-id="settings-navigation"><div class="nav-links"><a data-top-nav data-od-id="nav-overview" target="_top" href="/#/plugin-page/astrbot_plugin_chatgpt_codex/account">概览</a><a data-top-nav data-od-id="nav-settings" class="active" target="_top" href="/#/plugin-page/astrbot_plugin_chatgpt_codex/settings">设置</a></div><button id="themeToggle" class="theme-toggle" data-od-id="theme-toggle" type="button">切换暗色</button></nav></header>
-    <header class="page-head" data-od-id="settings-header"><div><p class="eyebrow">CODEX PLUGIN / SETTINGS</p><h1>插件设置</h1><p>管理 Codex 后端、模型、网络与运行限制。配置仅通过当前 AstrBot WebUI 会话保存，页面不会读取或展示登录凭据。</p></div><span id="settingsState" class="load-state" data-od-id="settings-load-state">读取中</span></header>
-    <form id="settingsForm" class="settings-form" data-od-id="settings-form">
-      <section class="section" data-od-id="connection-runtime-section"><header class="section-header"><div><span class="section-index">01 / CONNECTION &amp; RUNTIME</span><h2>连接与运行</h2><p>定义 Codex 可执行文件、连接方式和初始运行路径。</p></div></header><div class="field-grid">
-        <div class="field wide" data-od-id="codex-path-field"><label for="setting_codex_path">Codex 可执行文件</label><input id="setting_codex_path" data-setting="codex_path" type="text" autocomplete="off"><small>命令名或绝对路径，例如 codex；如果不在 PATH 中，请填写绝对路径。</small></div>
-        <div class="field" data-od-id="backend-mode-field"><label for="setting_backend_mode">推理后端</label><select id="setting_backend_mode" data-setting="backend_mode"><option value="transport">Responses Transport（推荐）</option><option value="app_server">App Server（稳定回退）</option><option value="auto">自动回退</option></select><small>Transport 适合轻量聊天；auto 会在鉴权、模型、协议或限流错误时回退 App Server。</small></div>
-        <div class="field" data-od-id="login-mode-field"><label for="setting_login_mode">登录方式</label><select id="setting_login_mode" data-setting="login_mode"><option value="browser">浏览器 OAuth（推荐）</option><option value="device_code">Device Code（无图形服务器）</option></select><small>仅影响下一次启动登录流程。</small></div>
-      </div></section>
-      <section class="section" data-od-id="model-reasoning-section"><header class="section-header"><div><span class="section-index">02 / MODEL &amp; REASONING</span><h2>模型与推理</h2><p>模型和推理强度由当前 Codex 后端实际支持项决定。</p></div></header><div class="field-grid">
-        <div class="field" data-od-id="default-model-field"><label for="setting_default_model">默认模型</label><input id="setting_default_model" data-setting="default_model" type="text" autocomplete="off"><small>填写服务端 model/list 返回的模型 ID；auto 使用服务端默认模型。</small></div>
-        <div class="field" data-od-id="reasoning-effort-field"><label for="setting_reasoning_effort">推理强度</label><input id="setting_reasoning_effort" data-setting="reasoning_effort" type="text" autocomplete="off"><small>例如 auto、low、medium；以当前模型实际支持项为准。</small></div>
-        <div class="field" data-od-id="harness-mode-field"><label for="setting_harness_mode">Agent 外壳</label><select id="setting_harness_mode" data-setting="harness_mode"><option value="lightweight">轻量聊天（推荐）</option><option value="codex">Codex 原生 coding-agent</option></select><small>轻量模式替换默认 coding-agent 指令，减少普通聊天的固定上下文。</small></div>
-        <div class="field" data-od-id="tool-router-field"><label for="setting_tool_router">AstrBot 工具路由</label><select id="setting_tool_router" data-setting="tool_router"><option value="minimal">按需（推荐）</option><option value="none">不提供工具</option><option value="all">全部已注册工具</option></select><small>当前 MVP 没有注册本地工具；此项为后续 ToolBridge 预留。</small></div>
-      </div></section>
-      <section class="section" data-od-id="networking-section"><header class="section-header"><div><span class="section-index">03 / NETWORKING</span><h2>网络</h2><p>代理设置同时作用于推理、OAuth token exchange 和 Device Code。</p></div></header><div class="field-grid">
-        <div class="field" data-od-id="transport-proxy-field"><label for="setting_transport_proxy">显式网络代理</label><input id="setting_transport_proxy" data-setting="transport_proxy" type="text" autocomplete="off" placeholder="留空则使用系统代理"><small>显式代理优先；留空时使用 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY。</small></div>
-        <div class="field" data-od-id="system-proxy-field"><label class="check-label" for="setting_use_system_proxy"><input id="setting_use_system_proxy" data-setting="use_system_proxy" type="checkbox">使用系统代理</label><small>Docker 必须把代理变量传入容器。</small></div>
-      </div></section>
-      <section class="section" data-od-id="limits-retention-section"><header class="section-header"><div><span class="section-index">04 / LIMITS &amp; RETENTION</span><h2>限制与保留</h2><p>控制并发、会话轮换和本地 Usage 记录的保留周期。</p></div></header><div class="field-grid">
-        <div class="field" data-od-id="concurrency-field"><label for="setting_max_concurrent_turns">最大并发 turn</label><input id="setting_max_concurrent_turns" data-setting="max_concurrent_turns" type="number" min="1" max="32" step="1"><small>所有会话同时运行的 Codex turn 数量。</small></div>
-        <div class="field" data-od-id="turn-timeout-field"><label for="setting_turn_timeout">单 turn 超时（秒）</label><input id="setting_turn_timeout" data-setting="turn_timeout" type="number" min="30" max="3600" step="1"><small>配额错误不会因为此项被无限重试。</small></div>
-        <div class="field" data-od-id="thread-turns-field"><label for="setting_max_thread_turns">单 thread 最大 turn</label><input id="setting_max_thread_turns" data-setting="max_thread_turns" type="number" min="0" max="10000" step="1"><small>0 表示关闭按 turn 轮换。</small></div>
-        <div class="field" data-od-id="thread-idle-field"><label for="setting_thread_idle_ttl">thread 空闲轮换（秒）</label><input id="setting_thread_idle_ttl" data-setting="thread_idle_ttl" type="number" min="0" max="31536000" step="1"><small>0 表示不按空闲时间轮换。</small></div>
-        <div class="field" data-od-id="thread-age-field"><label for="setting_thread_max_age">thread 最大寿命（秒）</label><input id="setting_thread_max_age" data-setting="thread_max_age" type="number" min="0" max="31536000" step="1"><small>0 表示不按最大寿命轮换。</small></div>
-        <div class="field" data-od-id="usage-timezone-field"><label for="setting_usage_timezone">Usage 时区</label><input id="setting_usage_timezone" data-setting="usage_timezone" type="text" autocomplete="off"><small>例如 Asia/Shanghai；用于热力图自然日。</small></div>
-        <div class="field wide" data-od-id="usage-retention-field"><label for="setting_usage_retention_days">Usage 保留天数</label><input id="setting_usage_retention_days" data-setting="usage_retention_days" type="number" min="0" max="3650" step="1"><small>0 表示永久保留，每天最多自动清理一次。</small></div>
-      </div></section>
-      <section class="section" data-od-id="behavior-security-section"><header class="section-header"><div><span class="section-index">05 / BEHAVIOR &amp; SECURITY</span><h2>行为与安全</h2><p>启用必要的行为选项，并谨慎决定是否允许本机能力。</p></div></header><div class="toggle-grid" data-od-id="behavior-switches">
-        <div class="toggle"><label class="check-label" for="setting_streaming"><input id="setting_streaming" data-setting="streaming" type="checkbox">启用流式调用</label></div>
-        <div class="toggle"><label class="check-label" for="setting_show_tool_status"><input id="setting_show_tool_status" data-setting="show_tool_status" type="checkbox">显示安全工具状态</label></div>
-        <div class="toggle"><label class="check-label" for="setting_force_http_transport"><input id="setting_force_http_transport" data-setting="force_http_transport" type="checkbox">强制 HTTPS 传输</label></div>
-        <div class="toggle"><label class="check-label" for="setting_enable_local_codex_tools"><input id="setting_enable_local_codex_tools" data-setting="enable_local_codex_tools" type="checkbox">允许本机 Codex 工具</label><small>开启会扩大 Codex 对本机资源的能力边界。</small></div>
-      </div></section>
-      <aside class="notice" data-od-id="restart-security-notice"><strong>安全提示</strong><span>“允许本机 Codex 工具”默认关闭。Codex 可执行文件、HTTPS 传输和最大并发设置保存后需要重启 AstrBot。</span></aside>
-      <div class="form-footer" data-od-id="save-settings-bar"><div><div id="settingsHint" class="hint">页面访问时自动读取当前设置。</div><div id="message" class="message" role="status" aria-live="polite"></div></div><button id="saveSettings" class="button primary" data-od-id="save-settings-button" type="submit">保存设置</button></div>
+<body data-od-id="settings-page">
+<header class="appbar" data-od-id="app-bar">
+  <div class="brand"><span class="dot">A</span>AstrBot <span>· Codex</span></div>
+  <nav>
+    <a href="/#/plugin-page/astrbot_plugin_chatgpt_codex/account" target="_top" data-od-id="nav-overview">概览</a>
+    <a href="/#/plugin-page/astrbot_plugin_chatgpt_codex/settings" target="_top" class="active" data-od-id="nav-settings">设置</a>
+  </nav>
+  <div class="spacer"></div>
+  <button id="themeToggle" class="theme-toggle" type="button" data-od-id="theme-toggle">暗色模式</button>
+</header>
+
+<main class="page-section">
+  <div id="previewNotice" class="preview-notice" hidden data-od-id="preview-notice"><b>预览模式：</b>AstrBot 插件桥接未加载。以下展示的是表单骨架与默认值；部署到插件页后会实时读取并保存当前配置。</div>
+
+  <header class="page-hero">
+    <h1>插件设置</h1>
+    <p>管理 Codex 后端、模型选择、会话缓存与安全策略。配置通过当前 AstrBot WebUI 会话保存，不会读取或展示登录凭据。</p>
+  </header>
+
+  <section class="card">
+    <form id="settingsForm" novalidate>
+      <!-- 连接 -->
+      <div class="group-head" data-od-id="group-connection">
+        <h2>连接</h2>
+        <p>Codex 可执行文件、推理传输方式与登录流程。仅影响下一次启动登录流程的项在保存后会提示重启。</p>
+      </div>
+      <div class="form-grid">
+        <div class="field field-wide">
+          <label for="setting_codex_path">Codex 可执行文件</label>
+          <input id="setting_codex_path" data-setting="codex_path" type="text" autocomplete="off" placeholder="例如 codex">
+          <span class="hint">命令名或绝对路径，例如 codex；如果不在 PATH 中，请填写绝对路径。</span>
+        </div>
+        <div class="field">
+          <label for="setting_backend_mode">推理后端</label>
+          <select id="setting_backend_mode" data-setting="backend_mode">
+            <option value="transport">Responses Transport（推荐）</option>
+            <option value="app_server">App Server（稳定回退）</option>
+            <option value="auto">自动回退</option>
+          </select>
+          <span class="hint">Transport 不创建 Codex thread/turn，适合轻量聊天；App Server 为稳定兼容回退；auto 会在鉴权、模型、协议或限流错误时回退 App Server。</span>
+        </div>
+        <div class="field">
+          <label for="setting_login_mode">启动登录方式</label>
+          <select id="setting_login_mode" data-setting="login_mode">
+            <option value="browser">浏览器 OAuth（推荐）</option>
+            <option value="device_code">Device Code（无图形服务器）</option>
+          </select>
+          <span class="hint">仅影响下一次启动登录流程。</span>
+        </div>
+        <div class="field">
+          <label for="setting_transport_proxy">显式网络代理</label>
+          <input id="setting_transport_proxy" data-setting="transport_proxy" type="text" autocomplete="off" placeholder="留空则使用系统代理">
+          <span class="hint">显式代理优先；留空时使用 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY。</span>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle"><input type="checkbox" id="setting_use_system_proxy" data-setting="use_system_proxy"><span class="track"></span><span class="thumb"></span></label>
+          <span class="toggle-body"><strong>使用系统代理</strong><small>同时用于推理、OAuth token exchange 和 Device Code。Docker 必须把代理变量传入容器。</small></span>
+        </div>
+      </div>
+
+      <!-- 模型 -->
+      <div class="group-head" data-od-id="group-model">
+        <h2>模型</h2>
+        <p>默认模型、推理强度与 Agent 外壳模式。</p>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="setting_default_model">默认模型</label>
+          <input id="setting_default_model" data-setting="default_model" type="text" autocomplete="off" placeholder="留空使用服务端默认模型">
+          <span class="hint">填写服务端 model/list 返回的模型 ID；auto 使用服务端默认模型。</span>
+        </div>
+        <div class="field">
+          <label for="setting_reasoning_effort">推理强度</label>
+          <input id="setting_reasoning_effort" data-setting="reasoning_effort" type="text" autocomplete="off" placeholder="例如 auto、low、medium">
+          <span class="hint">以当前模型实际支持项为准。</span>
+        </div>
+        <div class="field">
+          <label for="setting_harness_mode">Agent 外壳</label>
+          <select id="setting_harness_mode" data-setting="harness_mode">
+            <option value="lightweight">轻量聊天（推荐）</option>
+            <option value="codex">Codex 原生 coding-agent</option>
+          </select>
+          <span class="hint">轻量模式替换默认 coding-agent 指令，减少普通聊天的固定上下文。</span>
+        </div>
+        <div class="field">
+          <label for="setting_tool_router">AstrBot 工具路由</label>
+          <select id="setting_tool_router" data-setting="tool_router">
+            <option value="minimal">按需（推荐）</option>
+            <option value="none">不提供工具</option>
+            <option value="all">全部已注册工具</option>
+          </select>
+          <span class="hint">当前 MVP 没有注册本地工具；此项为后续 ToolBridge 预留。</span>
+        </div>
+      </div>
+
+      <!-- 会话 -->
+      <div class="group-head" data-od-id="group-session">
+        <h2>会话</h2>
+        <p>Codex 并发的 turn 数量、超时与 thread 轮换策略。</p>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="setting_max_concurrent_turns">最大并发 turn</label>
+          <input id="setting_max_concurrent_turns" data-setting="max_concurrent_turns" type="number" min="1" max="32" step="1">
+          <span class="hint">所有会话同时运行的 Codex turn 数量。</span>
+        </div>
+        <div class="field">
+          <label for="setting_turn_timeout">单 turn 超时（秒）</label>
+          <input id="setting_turn_timeout" data-setting="turn_timeout" type="number" min="30" max="3600" step="1">
+          <span class="hint">配额错误不会因为此项被无限重试。</span>
+        </div>
+        <div class="field">
+          <label for="setting_max_thread_turns">单 thread 最大 turn</label>
+          <input id="setting_max_thread_turns" data-setting="max_thread_turns" type="number" min="0" max="10000" step="1">
+          <span class="hint">0 表示关闭按 turn 轮换。</span>
+        </div>
+        <div class="field">
+          <label for="setting_thread_idle_ttl">thread 空闲轮换（秒）</label>
+          <input id="setting_thread_idle_ttl" data-setting="thread_idle_ttl" type="number" min="0" max="31536000" step="1">
+          <span class="hint">0 表示不按空闲时间轮换。</span>
+        </div>
+        <div class="field">
+          <label for="setting_thread_max_age">thread 最大寿命（秒）</label>
+          <input id="setting_thread_max_age" data-setting="thread_max_age" type="number" min="0" max="31536000" step="1">
+          <span class="hint">0 表示不按最大寿命轮换。</span>
+        </div>
+      </div>
+
+      <!-- 5小时限额 -->
+      <div class="group-head" data-od-id="group-limit">
+        <h2>5小时限额</h2>
+        <p>依据 Codex / ChatGPT 每 5 小时重置的用量窗口，设定提前提醒与用尽后的处理策略。对应字段需后端在 config 白名单中提供。</p>
+      </div>
+      <div class="form-grid">
+        <div class="toggle-row"><label class="toggle"><input type="checkbox" id="setting_quota_five_hour_notify" data-setting="quota_five_hour_notify"><span class="track"></span><span class="thumb"></span></label><span class="toggle-body"><strong>启用 5 小时配额提醒</strong><small>当本 5 小时窗口的用量接近上限时，在界面与消息中提前提示。</small></span></div>
+        <div class="field">
+          <label for="setting_quota_five_hour_warn_at">提醒阈值（%）</label>
+          <input id="setting_quota_five_hour_warn_at" data-setting="quota_five_hour_warn_at" type="number" min="10" max="100" step="1">
+          <span class="hint">达到该用量百分比时提醒，默认 80；避免用量过半后被限流打断对话。</span>
+        </div>
+        <div class="field">
+          <label for="setting_quota_exhausted_action">额度用尽时行为</label>
+          <select id="setting_quota_exhausted_action" data-setting="quota_exhausted_action">
+            <option value="pause">暂停新任务（推荐）</option>
+            <option value="fallback">自动回退 App Server</option>
+            <option value="notify">仅提示，不干预</option>
+          </select>
+          <span class="hint">用尽后暂停或回退；选择「仅提示」则不做干预。</span>
+        </div>
+      </div>
+
+      <!-- 行为与数据 -->
+      <div class="group-head" data-od-id="group-behavior">
+        <h2>行为与数据</h2>
+        <p>流式输出、安全工具状态与 usage 统计的时区、保留策略。</p>
+      </div>
+      <div class="form-grid">
+        <div class="toggle-row"><label class="toggle"><input type="checkbox" id="setting_streaming" data-setting="streaming"><span class="track"></span><span class="thumb"></span></label><span class="toggle-body"><strong>启用流式调用</strong><small>按 token 流式返回响应。</small></span></div>
+        <div class="toggle-row"><label class="toggle"><input type="checkbox" id="setting_show_tool_status" data-setting="show_tool_status"><span class="track"></span><span class="thumb"></span></label><span class="toggle-body"><strong>显示安全工具状态</strong><small>在响应中展示工具执行的安全状态。</small></span></div>
+        <div class="toggle-row"><label class="toggle"><input type="checkbox" id="setting_force_http_transport" data-setting="force_http_transport"><span class="track"></span><span class="thumb"></span></label><span class="toggle-body"><strong>强制 HTTPS 传输</strong><small>所有推理请求使用 HTTPS。</small></span></div>
+        <div class="toggle-row"><label class="toggle"><input type="checkbox" id="setting_enable_local_codex_tools" data-setting="enable_local_codex_tools"><span class="track"></span><span class="thumb"></span></label><span class="toggle-body"><strong>允许本机 Codex 工具</strong><small>开启后可能扩大 Codex 对本机资源的能力边界，请确认风险后再使用。</small></span></div>
+        <div class="field">
+          <label for="setting_usage_timezone">Usage 时区</label>
+          <input id="setting_usage_timezone" data-setting="usage_timezone" type="text" autocomplete="off" placeholder="例如 Asia/Shanghai">
+          <span class="hint">用于热力图等自然日统计。</span>
+        </div>
+        <div class="field">
+          <label for="setting_usage_retention_days">Usage 保留天数</label>
+          <input id="setting_usage_retention_days" data-setting="usage_retention_days" type="number" min="0" max="3650" step="1">
+          <span class="hint">0 表示永久保留，每天最多自动清理一次。</span>
+        </div>
+      </div>
+
+      <div class="warning"><b>安全提示：</b>“允许本机 Codex 工具”默认关闭。开启后可能扩大 Codex 对本机资源的能力边界，请确认风险后再使用。Codex 可执行文件、HTTPS 传输和最大并发设置保存后需要重启 AstrBot 才会完全生效。</div>
+
+      <div class="form-footer">
+        <span id="settingsHint" class="hint">页面访问时自动读取当前设置。</span>
+        <button id="saveSettings" class="btn primary" type="submit">保存设置</button>
+      </div>
     </form>
-    <footer class="privacy" data-od-id="privacy-note">设置页面只处理配置白名单；不会读取或展示 access token、refresh token、Cookie 或 OAuth 回调敏感参数。</footer>
-  </main>
-  <script>
-    (()=>{
-      const page=window.AstrBotPluginPage,$=id=>document.getElementById(id);let dirty=false;
-      function message(text,kind=""){const node=$("message");node.textContent=text||"";node.className="message "+kind}
-      function errorText(error){const text=String(error?.message||error||"插件请求失败");return /\b(401|unauthori[sz]ed)\b/i.test(text)||/token.*(expired|invalid)/i.test(text)?"AstrBot WebUI 会话未授权或已过期，请先登录管理界面后刷新此页面。":text}
-      async function call(endpoint,body){return body===undefined?await page.apiGet(endpoint):await page.apiPost(endpoint,body)}
-      function dataOf(result){if(result?.status==="error")throw new Error(result.message||"插件请求失败");return result?.status==="ok"?(result.data||{}):(result||{})}
-      function setState(text,kind=""){const state=$("settingsState");state.textContent=text;state.className="load-state "+kind}
-      function applySettings(values){if(!values||typeof values!=="object")return;document.querySelectorAll("[data-setting]").forEach(node=>{const key=node.dataset.setting;if(!(key in values))return;if(node.type==="checkbox")node.checked=Boolean(values[key]);else node.value=String(values[key]??"")});dirty=false}
-      async function load(){setState("读取中");$("settingsHint").textContent="正在读取当前配置…";try{const data=dataOf(await call("config"));applySettings(data.config||{});setState("已读取","ok");$("settingsHint").textContent="页面访问时已读取当前配置。"}catch(error){const text=errorText(error);setState("读取失败","error");$("settingsHint").textContent=text;message(text,"error")}}
-      async function save(event){event.preventDefault();const button=$("saveSettings"),values={};document.querySelectorAll("[data-setting]").forEach(node=>{values[node.dataset.setting]=node.type==="checkbox"?node.checked:node.type==="number"?Number(node.value):node.value.trim()});button.disabled=true;button.textContent="保存中…";setState("保存中");message("","");try{const data=dataOf(await call("config",{config:values}));applySettings(data.config||values);const text=data.restartRequired?"设置已保存；部分进程设置将在重启 AstrBot 后生效。":"设置已保存并立即生效。";setState("已保存","ok");$("settingsHint").textContent=text;message(text,"success")}catch(error){const text=errorText(error);setState("保存失败","error");$("settingsHint").textContent=text;message(text,"error")}finally{button.disabled=false;button.textContent="保存设置"}}
-      function applyTheme(theme){const value=theme==="dark"?"dark":"light";document.documentElement.dataset.theme=value;$("themeToggle").textContent=value==="dark"?"切换亮色":"切换暗色";try{localStorage.setItem("astrbot_codex_theme",value)}catch{}}
-      function initTheme(){let saved="";try{saved=localStorage.getItem("astrbot_codex_theme")||""}catch{}applyTheme(saved||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"))}
-      function wireTopNavigation(){document.querySelectorAll("[data-top-nav]").forEach(link=>link.addEventListener("click",event=>{event.preventDefault();window.parent.location.assign(new URL(link.getAttribute("href"),window.parent.location.href).href)}))}
-      $("settingsForm").addEventListener("submit",save);document.querySelectorAll("[data-setting]").forEach(node=>{node.addEventListener("input",()=>{dirty=true});node.addEventListener("change",()=>{dirty=true})});$("themeToggle").addEventListener("click",()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark"));wireTopNavigation();initTheme();load();
-    })();
-  </script>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+  </section>
+
+  <div class="privacy">🔒 设置页面只处理配置白名单；不会读取或展示 access token、refresh token、Cookie 或 OAuth 回调敏感参数。</div>
+</main>
+
+<script>
+(()=> {
+  const page=window.AstrBotPluginPage,$=id=>document.getElementById(id);
+  let dirty=false;
+  function message(text,kind=""){const n=$("message");n.textContent=text||"";n.className="message "+kind}
+  function errorText(e){const t=String(e?.message||e||"插件请求失败");return /\b(401|unauthori[sz]ed)\b/i.test(t)||/token.*(expired|invalid)/i.test(t)?"AstrBot WebUI 会话未授权或已过期，请先登录管理界面后刷新此页面。":t}
+  async function call(endpoint,body){return body===undefined?await page.apiGet(endpoint):await page.apiPost(endpoint,body)}
+  function dataOf(r){if(r?.status==="error")throw new Error(r.message||"插件请求失败");return r?.status==="ok"?(r.data||{}):(r||{})}
+  const noBridge=!page||typeof page.apiGet!=="function";
+  function applyBridgeNotice(){const n=$("previewNotice");if(n)n.hidden=!noBridge;
+    if(noBridge){const hint=$("settingsHint");if(hint)hint.textContent="预览模式：桥接未加载，以下为默认值，保存不可用。";}
+  }
+  function applySettings(values){if(!values||typeof values!=="object")return;document.querySelectorAll("[data-setting]").forEach(node=>{const key=node.dataset.setting;if(!(key in values))return;if(node.type==="checkbox")node.checked=Boolean(values[key]);else node.value=String(values[key]??"");});dirty=false}
+  async function load(){if(noBridge){applyBridgeNotice();return;}try{const d=dataOf(await call("config"));applySettings(d.config||{});$("settingsHint").textContent="页面访问时已读取当前配置。";}catch(e){$("settingsHint").textContent=errorText(e);message(errorText(e),"error")}}
+  function collectValues(){const values={};document.querySelectorAll("[data-setting]").forEach(node=>{values[node.dataset.setting]=node.type==="checkbox"?node.checked:node.type==="number"?Number(node.value):node.value.trim()});return values}
+  async function save(event){event.preventDefault();if(noBridge){message("预览模式：AstrBot 插件桥接未加载，无法保存。","error");return;}const b=$("saveSettings"),values=collectValues();b.disabled=true;try{const d=dataOf(await call("config",{config:values}));applySettings(d.config||values);$("settingsHint").textContent=d.restartRequired?"设置已保存；部分进程设置将在重启 AstrBot 后生效。":"设置已保存并立即生效。";message($("settingsHint").textContent,"success")}catch(e){$("settingsHint").textContent=errorText(e);message(errorText(e),"error")}finally{b.disabled=false}}
+  function applyTheme(theme){const value=theme==="dark"?"dark":"light";document.documentElement.dataset.theme=value;$("themeToggle").textContent=value==="dark"?"亮色模式":"暗色模式";try{localStorage.setItem("astrbot_codex_theme",value)}catch{}}
+  function initTheme(){let saved="";try{saved=localStorage.getItem("astrbot_codex_theme")||""}catch{}applyTheme(saved||"dark")}
+  function wireTopNavigation(){document.querySelectorAll("[data-od-id]").forEach(el=>{const href=el.getAttribute("href");if(href&&href.endsWith(".html"))el.addEventListener("click",()=>{window.location.href=href});})}
+  $("settingsForm").addEventListener("submit",save);
+  document.querySelectorAll("[data-setting]").forEach(node=>{node.addEventListener("input",()=>{dirty=true});node.addEventListener("change",()=>{dirty=true})});
+  $("themeToggle").onclick=()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
+  applyBridgeNotice();initTheme();wireTopNavigation();load();
+})();
+</script>
 </body>
 </html>

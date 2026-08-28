@@ -3,175 +3,650 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Codex Profile</title>
+<title>Codex 概览</title>
 <script src="/api/plugin/page/bridge-sdk.js"></script>
 <style>
-:root{color-scheme:light dark;font-family:"Noto Sans SC","Microsoft YaHei",Inter,system-ui,-apple-system,"Segoe UI",sans-serif;--bg:#f6f7f9;--panel:#fff;--panel-soft:#fbfcfe;--text:#1d2433;--muted:#7b8494;--line:#e5e8ee;--accent:#4c9cff;--accent-strong:#2e7de0;--blue-soft:#eaf4ff;--green:#38b982;--yellow:#e5a72f;--shadow:0 18px 55px #1520330d}
-*{box-sizing:border-box}body,button,a,input,textarea,select{font-family:inherit}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text)}a{color:inherit;text-decoration:none}.shell{max-width:1120px;margin:auto;padding:34px 24px 70px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:38px}.wordmark{font-weight:800;letter-spacing:-.02em}.wordmark span{color:var(--accent)}.nav{display:flex;gap:6px;padding:4px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}.nav a{padding:7px 14px;border-radius:999px;color:var(--muted);font-size:13px;font-weight:700}.nav a.active{background:var(--text);color:var(--panel)}.profile-head{text-align:center}.avatar{width:94px;height:94px;margin:0 auto 17px;display:grid;place-items:center;border-radius:50%;background:linear-gradient(145deg,#a8d6ff,#4c9cff 60%,#2563eb);box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 14%,transparent);color:#fff;font-size:34px;font-weight:850}.profile-name{margin:0;font-size:32px;letter-spacing:-.04em}.profile-sub{display:flex;align-items:center;justify-content:center;gap:9px;margin:9px 0 0;color:var(--muted);font-size:15px}.plan-badge{border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--panel);font-size:13px}.head-actions{display:flex;justify-content:center;gap:8px;margin-top:22px}.button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);padding:7px 12px;font-size:13px;font-weight:750;cursor:pointer}.button.primary{border-color:var(--accent);background:var(--accent);color:#fff}.button.primary:hover{background:var(--accent-strong)}.button.danger{color:#c04b57}.button:disabled{opacity:.55;cursor:wait}.message{min-height:22px;margin:16px 0 0;text-align:center;color:var(--muted);font-size:13px}.message.success{color:var(--green)}.message.error{color:#c04b57}.stats{display:grid;grid-template-columns:repeat(5,1fr);margin:42px 0 48px;padding:4px;border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:var(--shadow)}.stat{text-align:center;padding:18px 10px;border-right:1px solid var(--line)}.stat:last-child{border-right:0}.stat-value{font-size:22px;font-weight:800;letter-spacing:-.03em}.stat-label{margin-top:5px;color:var(--muted);font-size:12px}.section{margin-top:34px}.section-title{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px}.section-title h2{margin:0;font-size:20px;letter-spacing:-.03em}.section-title p{margin:4px 0 0;color:var(--muted);font-size:12px}.segmented{display:flex;gap:18px;color:var(--muted);font-size:13px;font-weight:700}.segmented .selected{color:var(--text)}.activity-card{padding:22px 24px;border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:var(--shadow)}.activity-grid{display:grid;grid-template-columns:repeat(28,1fr);gap:6px;overflow:hidden}.activity-cell{aspect-ratio:1;border-radius:4px;background:var(--line);min-width:7px}.activity-cell.level-1{background:#b8dcff}.activity-cell.level-2{background:#79baff}.activity-cell.level-3{background:#4c9cff}.activity-cell.level-4{background:#246fca}.activity-legend{display:flex;justify-content:space-between;gap:15px;margin-top:15px;color:var(--muted);font-size:11px}.legend-swatches{display:flex;align-items:center;gap:4px}.legend-swatches i{display:block;width:12px;height:12px;border-radius:3px;background:var(--line)}.legend-swatches i:nth-child(2){background:#b8dcff}.legend-swatches i:nth-child(3){background:#79baff}.legend-swatches i:nth-child(4){background:#4c9cff}.legend-swatches i:nth-child(5){background:#246fca}.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.info-card{padding:22px 24px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}.info-card h3{margin:0 0 17px;font-size:16px}.info-list{display:grid;gap:14px}.info-row{display:flex;justify-content:space-between;gap:16px;color:var(--muted);font-size:13px}.info-row strong{color:var(--text);font-weight:750;text-align:right;overflow-wrap:anywhere}.quota-track{height:9px;margin:5px 0 12px;border-radius:99px;background:var(--line);overflow:hidden}.quota-track span{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#71b9ff,var(--accent));transition:width .35s ease}.quota-meta{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}.model-list{display:grid;gap:0}.model-row{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line);font-size:13px}.model-row:last-child{border-bottom:0}.model-row small{display:block;color:var(--muted);margin-top:4px;font-size:11px}.model-effort{color:var(--muted);font-size:11px;text-align:right}.login-flow{display:none;max-width:570px;margin:18px auto 0;padding:16px;text-align:left;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.login-flow.open{display:block}.login-flow p{margin:0 0 9px;color:var(--muted);font-size:12px;line-height:1.55}.login-flow textarea{width:100%;min-height:66px;resize:vertical;border:1px solid var(--line);border-radius:8px;background:var(--panel-soft);color:var(--text);padding:9px;font-size:12px;line-height:1.45}.login-flow .actions{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}.privacy{margin-top:36px;text-align:center;color:var(--muted);font-size:11px}@media(prefers-color-scheme:dark){:root{--bg:#101318;--panel:#171b22;--panel-soft:#12161c;--text:#edf1f7;--muted:#929baa;--line:#2a303a;--blue-soft:#172b45;--shadow:0 18px 55px #00000025}.nav a.active{background:#edf1f7;color:#171b22}.activity-cell{background:#252b34}.activity-cell.level-1{background:#315a7f}.activity-cell.level-2{background:#397eb8}.activity-cell.level-3{background:#4c9cff}.activity-cell.level-4{background:#79baff}.button{border-color:var(--line)}.login-flow textarea{background:#12161c}}@media(max-width:780px){.shell{padding:24px 14px 50px}.topbar{margin-bottom:28px}.stats{grid-template-columns:repeat(2,1fr);border-radius:14px;margin:32px 0 40px}.stat{border-bottom:1px solid var(--line)}.stat:nth-child(2n){border-right:0}.stat:nth-last-child(-n+2){border-bottom:0}.stat:last-child{grid-column:1/-1}.overview-grid{grid-template-columns:1fr}.activity-grid{gap:4px}.profile-name{font-size:28px}.segmented{display:none}}
-</style>
-<style>
-/* AstrBot-aligned flat controls and an explicit theme switch. */
-:root[data-theme="light"]{color-scheme:light;--bg:#f6f7f9;--panel:#fff;--panel-soft:#fbfcfe;--text:#1d2433;--muted:#7b8494;--line:#e5e8ee;--blue-soft:#eaf4ff;--shadow:none}
-:root[data-theme="dark"]{color-scheme:dark;--bg:#101318;--panel:#171b22;--panel-soft:#12161c;--text:#edf1f7;--muted:#929baa;--line:#2a303a;--blue-soft:#172b45;--shadow:none}
-.theme-toggle{border:0;border-radius:0;background:transparent;color:var(--muted);padding:8px 2px;font:inherit;font-size:12px;font-weight:750;cursor:pointer}
-.theme-toggle:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}
-.button{border:0;border-radius:6px;background:color-mix(in srgb,var(--text) 8%,transparent);box-shadow:none}
-.button:hover{background:color-mix(in srgb,var(--text) 14%,transparent)}
-.button.primary{border:0;background:var(--accent);color:#fff}
-.button.primary:hover{background:var(--accent-strong)}
-.button.danger{background:transparent;color:#c04b57}
-.avatar{display:none}
-.avatar img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
-.avatar img[hidden],.avatar span[hidden]{display:none}
-.activity-grid{grid-template-columns:repeat(52,minmax(7px,1fr));grid-template-rows:repeat(7,minmax(7px,1fr));gap:5px}
-.activity-cell{width:100%;aspect-ratio:1}
-.activity-legend{align-items:center}
-.settings-panel[hidden],#overviewPanel[hidden]{display:none}
-.setup-card{margin:0 0 24px;padding:22px 24px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:10px;background:color-mix(in srgb,var(--accent) 5%,var(--panel))}.setup-card[hidden]{display:none}.setup-card h2{margin:0;font-size:20px;letter-spacing:-.03em}.setup-card p{margin:7px 0 0;color:var(--muted);font-size:13px;line-height:1.6}.setup-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.setup-step{padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:12px}.setup-step strong{display:block;margin-bottom:5px;font-size:13px}.setup-step span{color:var(--muted);line-height:1.5}.setup-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(180px,.7fr);gap:14px;margin-top:16px}.setup-field label{display:block;margin-bottom:6px;font-size:13px;font-weight:750}.setup-field input,.setup-field select{width:100%;min-height:38px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--text);padding:8px 10px;font:inherit;font-size:13px}.setup-field small{display:block;margin-top:6px;color:var(--muted);font-size:11px;line-height:1.5}.setup-detection{display:flex;align-items:flex-start;gap:9px;margin-top:14px;padding:10px 12px;border-radius:8px;background:color-mix(in srgb,var(--text) 6%,transparent);color:var(--muted);font-size:12px;line-height:1.55}.setup-detection strong{color:var(--text)}.setup-detection.ok{color:var(--green)}.setup-detection.error{color:#c04b57}.setup-docker{margin-top:12px;padding:10px 12px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--muted);font-size:12px;line-height:1.6}.setup-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:17px}.setup-actions .hint{color:var(--muted);font-size:12px}.setup-actions button:disabled{opacity:.55;cursor:wait}
-.settings-card{max-width:960px;margin:0 auto;padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:var(--shadow)}
-.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.setting{min-width:0}.setting-wide{grid-column:1/-1}.setting label{display:block;font-size:13px;font-weight:750;margin-bottom:6px}.setting small{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:6px}.setting input[type=text],.setting input[type=number],.setting select{width:100%;min-height:38px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--text);padding:8px 10px;font-size:13px}.setting input:focus,.setting select:focus{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:1px}.setting-toggle{display:flex;align-items:center;gap:9px;min-height:38px}.setting-toggle input{width:17px;height:17px;accent-color:var(--accent)}.setting-toggle label{margin:0}.settings-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:22px}.settings-hint{color:var(--muted);font-size:12px}.settings-state{margin-top:15px;min-height:20px;color:var(--muted);font-size:13px}.settings-state.success{color:var(--green)}.settings-state.error{color:#c04b57}
-.usage-summary{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}.usage-kpi{padding:18px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.usage-kpi strong{display:block;font-size:24px;letter-spacing:-.04em;font-variant-numeric:tabular-nums}.usage-kpi span{display:block;margin-top:6px;color:var(--muted);font-size:12px}.usage-grid-wrap{overflow-x:auto;padding-bottom:4px}.usage-grid{display:grid;grid-auto-rows:auto;gap:4px;width:100%;min-width:680px}.usage-cell{width:100%;height:auto;aspect-ratio:1;border-radius:3px;background:var(--line);cursor:pointer}.usage-cell.level-1{background:#b8dcff}.usage-cell.level-2{background:#79baff}.usage-cell.level-3{background:#4c9cff}.usage-cell.level-4{background:#246fca}.usage-cell.level-5{background:#15509d}.usage-cell:hover{outline:2px solid var(--text);outline-offset:1px}.usage-months{display:flex;justify-content:space-between;min-width:680px;margin:10px 0 8px;color:var(--muted);font-size:11px}.usage-meta{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;color:var(--muted);font-size:12px}.usage-legend{display:flex;gap:4px;align-items:center}.usage-legend i{width:12px;height:12px;border-radius:3px;background:var(--line)}.usage-legend i:nth-child(2){background:#b8dcff}.usage-legend i:nth-child(3){background:#79baff}.usage-legend i:nth-child(4){background:#4c9cff}.usage-legend i:nth-child(5){background:#246fca}.usage-legend i:nth-child(6){background:#15509d}.usage-columns{display:grid;grid-template-columns:1.25fr .75fr;gap:18px}.usage-table{display:grid;gap:0}.usage-table-row{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);font-size:13px}.usage-table-row:last-child{border-bottom:0}.usage-table-row span:last-child{font-variant-numeric:tabular-nums;color:var(--muted)}.usage-periods{display:flex;gap:6px}.usage-periods button{border:0;border-radius:6px;background:color-mix(in srgb,var(--text) 8%,transparent);color:var(--muted);padding:6px 9px;font:inherit;font-size:12px;cursor:pointer}.usage-periods button.active{background:var(--accent);color:#fff}.usage-rate-row{display:grid;gap:6px;margin-bottom:14px}.usage-rate-row:last-child{margin-bottom:0}.usage-rate-row>div{display:flex;justify-content:space-between;gap:12px;font-size:12px}.usage-rate-row small{color:var(--muted)}
-@media(max-width:980px){.usage-summary{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:780px){.activity-grid{grid-template-columns:repeat(52,minmax(4px,1fr));gap:3px}.activity-cell{min-width:4px}}
-@media(max-width:780px){.settings-grid{grid-template-columns:1fr}.setting-wide{grid-column:auto}.settings-actions{align-items:flex-start;flex-direction:column}}
- .usage-note{margin:0;color:var(--muted);font-size:12px;line-height:1.55}.usage-turns{display:grid;gap:0}.usage-turn{display:grid;grid-template-columns:minmax(120px,1fr) repeat(5,minmax(64px,.55fr));gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);font-size:12px}.usage-turn:last-child{border-bottom:0}.usage-turn strong{font-weight:750}.usage-turn span{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
-  @media(max-width:780px){.usage-summary{grid-template-columns:repeat(2,1fr)}.usage-columns{grid-template-columns:1fr}.usage-kpi strong{font-size:20px}}@media(max-width:780px){.usage-turn{grid-template-columns:1fr 1fr}.usage-turn span{text-align:left}}
-/* Compact, AstrBot-like profile and controls: no decorative avatar, gradients, or oversized hero. */
-.nav{gap:20px;padding:0;border:0;border-radius:0;background:transparent}.nav a{padding:8px 2px;border-radius:0;border-bottom:2px solid transparent}.nav a.active{border-bottom-color:var(--accent);background:transparent;color:var(--text)}.theme-toggle{border-radius:0;background:transparent;color:var(--muted);padding:8px 2px}.profile-head{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:20px 24px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:none;text-align:left}.profile-copy{min-width:0}.profile-kicker{margin-bottom:5px;color:var(--accent-strong);font-size:12px;font-weight:750;letter-spacing:.04em}.profile-name{margin:0;font-size:22px;letter-spacing:-.03em;overflow-wrap:anywhere}.profile-sub{justify-content:flex-start;gap:9px;margin:7px 0 0;font-size:13px}.plan-badge{border-radius:5px;padding:3px 8px;background:transparent;font-size:12px}.head-actions{justify-content:flex-end;gap:8px;flex-wrap:wrap;margin:0}.button{border-radius:6px}.stats{grid-template-columns:repeat(4,1fr);margin:28px 0 42px;padding:0;border-radius:10px;box-shadow:none}.stat{padding:16px 10px}.quota-track span{background:var(--accent)}.login-flow{margin:12px 0 0;border-radius:8px}
-@media(max-width:780px){.profile-head{align-items:flex-start;flex-direction:column;padding:18px}.head-actions{justify-content:flex-start}.stats{grid-template-columns:repeat(2,1fr);margin:24px 0 34px}.stat:nth-child(2n){border-right:0}.stat:nth-last-child(-n+2){border-bottom:0}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#000000;
+  --ink-rgb:226 232 240;
+  --surface:rgb(22 28 39);
+  --surface-muted:#1b2430;
+  --surface-soft:#19222e;
+  --surface-sunken:#111823;
+  --text:#e6edf3;
+  --heading:#f0f6fc;
+  --muted:rgb(var(--ink-rgb) / .72);
+  --muted2:rgb(var(--ink-rgb) / .5);
+  --control-bg:#dbe7f0;
+  --control-on:#0d1117;
+  --accent:#79c0ff;
+  --accent2:#58a6ff;
+  --danger:#ff7b72;
+  --success:#56d364;
+  --warning:#ffa657;
+  --border-muted:rgb(var(--ink-rgb) / .07);
+  --border-subtle:rgb(var(--ink-rgb) / .11);
+  --border-hover:rgb(var(--ink-rgb) / .2);
+  --border-focus:rgb(var(--ink-rgb) / .28);
+  --highlight:rgb(var(--ink-rgb) / .075);
+  --highlight-strong:rgb(var(--ink-rgb) / .12);
+  --shadow-rgb:0 0 0;
+  --menu-shadow:0 16px 42px rgb(var(--shadow-rgb) / .36);
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f5f7fa;
+  --ink-rgb:15 23 42;
+  --surface:rgb(255 255 255);
+  --surface-muted:#f8fafc;
+  --surface-soft:#fbfcfd;
+  --surface-sunken:#f1f4f7;
+  --text:#0f172a;
+  --heading:#08111f;
+  --muted:rgb(var(--ink-rgb) / .66);
+  --muted2:rgb(var(--ink-rgb) / .48);
+  --control-bg:#111827;
+  --control-on:#ffffff;
+  --accent:#2479a7;
+  --accent2:#1d6b96;
+  --danger:#b42318;
+  --success:#15803d;
+  --warning:#c2410c;
+  --border-muted:rgb(var(--ink-rgb) / .05);
+  --border-subtle:rgb(var(--ink-rgb) / .075);
+  --border-hover:rgb(var(--ink-rgb) / .14);
+  --border-focus:rgb(var(--ink-rgb) / .2);
+  --highlight:rgb(var(--ink-rgb) / .055);
+  --highlight-strong:rgb(var(--ink-rgb) / .085);
+  --shadow-rgb:15 23 42;
+  --menu-shadow:0 12px 32px rgb(var(--shadow-rgb) / .08);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body,button,a,input,select,textarea{font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC","Outfit",system-ui,sans-serif}
+body{background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer}
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+[hidden]{display:none!important}
+
+/* ---- App bar ---- */
+.appbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px;height:56px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border-muted)}
+.brand{display:flex;align-items:center;gap:9px;font-family:"Outfit","PingFang SC",sans-serif;font-weight:600;font-size:17px;letter-spacing:-.01em;color:var(--heading);white-space:nowrap}
+.brand .dot{width:20px;height:20px;border-radius:6px;background:var(--accent);display:grid;place-items:center;color:var(--control-on);font-size:11px;font-weight:700}
+.brand span{color:var(--accent)}
+.appbar nav{display:flex;gap:4px;margin-left:6px}
+.appbar nav a{display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--muted)}
+.appbar nav a:hover{background:var(--highlight);color:var(--text)}
+.appbar nav a.active{color:var(--heading);background:var(--highlight-strong)}
+.appbar .spacer{flex:1}
+.conn-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--border-subtle);border-radius:999px;font-size:12px;font-weight:600;color:var(--muted)}
+.conn-chip i{width:8px;height:8px;border-radius:50%;background:var(--warning)}
+.conn-chip.ok i{background:var(--success)}
+.conn-chip.off i{background:var(--muted2)}
+.theme-toggle{border:1px solid var(--border-subtle);border-radius:8px;background:transparent;color:var(--muted);height:34px;padding:0 12px;font-size:12px;font-weight:650}
+.theme-toggle:hover{background:var(--highlight);color:var(--text);border-color:var(--border-hover)}
+
+/* ---- Layout ---- */
+.page-section{max-width:1000px;margin:0 auto;padding:26px 20px 64px;display:flex;flex-direction:column;gap:16px}
+.preview-notice{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid var(--border-subtle);border-radius:12px;background:var(--surface-soft);color:var(--muted);font-size:12.5px;line-height:1.6}
+.preview-notice b{color:var(--heading)}
+
+/* ---- Cards ---- */
+.card{background:var(--surface);border:1px solid var(--border-subtle);border-radius:16px;padding:20px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
+.card-head h2{margin:0;font-family:"Outfit","PingFang SC",sans-serif;font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--heading)}
+.card-head p{margin:5px 0 0;color:var(--muted);font-size:12.5px;line-height:1.6}
+.caption{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--border-subtle);font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.caption.ok{color:var(--success);border-color:color-mix(in srgb,var(--success) 40%,var(--border-subtle))}
+.caption.warn{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 40%,var(--border-subtle))}
+
+/* ---- Account banner ---- */
+.account-banner{display:flex;justify-content:space-between;align-items:center;gap:22px;padding:22px 24px}
+.account-copy{min-width:0}
+.kicker{display:block;margin-bottom:6px;color:var(--accent);font-family:"Outfit",sans-serif;font-size:12px;font-weight:600;letter-spacing:.08em}
+.account-name{margin:0;font-family:"Outfit","PingFang SC",sans-serif;font-weight:600;font-size:26px;letter-spacing:-.02em;color:var(--heading);overflow-wrap:anywhere}
+.account-sub{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:9px;font-size:13px;color:var(--muted)}
+.account-sub .sep{color:var(--border-hover)}
+.plan-badge{display:inline-flex;align-items:center;border:1px solid var(--border-subtle);border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600;color:var(--text);background:var(--highlight)}
+.stat-dot{width:8px;height:8px;border-radius:50%;background:var(--success)}
+.stat-dot.off{background:var(--muted2)}
+.account-actions{display:flex;flex-wrap:wrap;gap:9px;flex:none}
+
+/* ---- Buttons ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:0 14px;border:1px solid var(--border-subtle);border-radius:9px;background:var(--highlight);color:var(--text);font-size:13px;font-weight:600;white-space:nowrap;transition:background .15s,border-color .15s}
+.btn:hover{background:var(--highlight-strong);border-color:var(--border-hover)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.primary{background:var(--control-bg);color:var(--control-on);border-color:transparent}
+.btn.primary:hover{background:var(--control-on);color:var(--control-bg);border-color:transparent}
+.btn.ghost{background:transparent}
+.btn.ghost:hover{background:var(--highlight)}
+.btn.danger{background:transparent;color:var(--danger)}
+.btn.danger:hover{background:color-mix(in srgb,var(--danger) 12%,transparent)}
+.btn.sm{min-height:32px;padding:0 11px;font-size:12px;border-radius:8px}
+
+/* ---- Message ---- */
+.message{min-height:20px;font-size:13px;color:var(--muted);line-height:1.5}
+.message.error{color:var(--danger)}
+.message.success{color:var(--success)}
+
+/* ---- Interaction state / status regions ---- */
+.state-line{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;line-height:1.6}
+.spinner{width:15px;height:15px;border-radius:50%;border:2px solid var(--border-subtle);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---- Login flow ---- */
+.login-flow{border:1px solid var(--border-subtle);border-radius:16px;background:var(--surface);overflow:hidden}
+.login-flow .inner{padding:20px 24px;display:flex;flex-direction:column;gap:14px}
+.login-flow .hint{color:var(--muted);font-size:13px;line-height:1.6;margin:0}
+.login-flow textarea{width:100%;min-height:74px;resize:vertical;border:1px solid var(--border-subtle);border-radius:9px;background:var(--surface-sunken);color:var(--text);padding:10px 12px;font:inherit;font-size:12.5px;line-height:1.5;font-family:"PingFang SC",monospace}
+.login-flow textarea::placeholder{color:var(--muted2)}
+.login-flow .actions{display:flex;flex-wrap:wrap;gap:9px}
+.flow-divider{border-top:1px solid var(--border-muted);padding-top:14px;display:flex;flex-direction:column;gap:10px}
+.flow-title{margin:0;color:var(--heading);font-size:14px;font-weight:650}
+.device-code{font-family:"Outfit",monospace;font-size:20px;font-weight:600;letter-spacing:.06em;color:var(--heading)}
+
+/* ---- Overview grid ---- */
+.overview-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.kpi{background:var(--surface-soft);border:1px solid var(--border-muted);border-radius:12px;padding:15px 14px}
+.kpi strong{display:block;font-family:"Outfit",sans-serif;font-weight:600;font-size:23px;letter-spacing:-.02em;color:var(--heading);font-variant-numeric:tabular-nums}
+.kpi span{display:block;margin-top:6px;color:var(--muted);font-size:12px;line-height:1.5}
+
+/* ---- Quota card (Codex-style usage) ---- */
+.usage-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px}
+.usage-big{font-family:"Outfit",sans-serif;font-weight:600;font-size:52px;letter-spacing:-.03em;color:var(--heading);line-height:1;font-variant-numeric:tabular-nums}
+.usage-big small{display:block;margin-top:8px;font-family:"PingFang SC",sans-serif;font-size:12px;font-weight:600;letter-spacing:0;color:var(--muted2)}
+.usage-side{display:flex;flex-direction:column;gap:12px;text-align:right;min-width:0}
+.pill{font-family:"Outfit",sans-serif;font-weight:600;font-size:17px;color:var(--text)}
+.pill-label{color:var(--muted2);font-size:12px}
+.usage-line{display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:12px;color:var(--muted2)}
+.usage-line strong{font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+.track{position:relative;height:9px;border-radius:999px;background:var(--highlight);overflow:hidden}
+.track-lg{height:11px}
+.track span{position:absolute;inset:0 auto 0 0;border-radius:999px;background:var(--accent)}
+.quota-meta{display:flex;justify-content:space-between;margin-top:10px;color:var(--muted);font-size:12px}
+.info-list{display:flex;flex-direction:column;gap:12px}
+.info-row{display:flex;justify-content:space-between;align-items:center;gap:14px;font-size:13px}
+.info-row span{color:var(--muted)}
+.info-row strong{font-weight:600;color:var(--text);text-align:right;font-variant-numeric:tabular-nums}
+.info-row strong.primary{color:var(--accent)}
+
+/* ---- Tables / turns ---- */
+.turns{display:grid}
+.turn-row{display:grid;grid-template-columns:minmax(140px,1.4fr) repeat(5,minmax(66px,1fr));gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--border-muted);font-size:12.5px}
+.turn-row:last-child{border-bottom:0}
+.turn-head{color:var(--muted);font-weight:650;font-size:11.5px;letter-spacing:.01em}
+.turn-row strong{font-weight:600;color:var(--text)}
+.turn-row span{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.turn-row span:first-of-type{text-align:left}
+
+/* ---- Models ---- */
+.model-list{display:grid;gap:4px}
+.model-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:11px 12px;border-radius:9px}
+.model-row:hover{background:var(--highlight)}
+.model-row strong{display:block;font-weight:600;color:var(--text);font-size:13.5px}
+.model-row small{display:block;margin-top:3px;color:var(--muted);font-size:11.5px}
+.model-effort{color:var(--accent);font-size:12px;font-weight:600;white-space:nowrap}
+.model-row.off{opacity:.5}
+
+/* ---- Empty / states ---- */
+.empty{color:var(--muted);font-size:13px;line-height:1.6}
+.error-box{border:1px solid color-mix(in srgb,var(--danger) 45%,var(--border-subtle));background:color-mix(in srgb,var(--danger) 8%,var(--surface-soft));color:var(--danger);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.6}
+
+/* ---- Privacy footnote ---- */
+.privacy{display:flex;align-items:flex-start;gap:9px;color:var(--muted);font-size:12px;line-height:1.6;padding:0 6px}
+.privacy b{color:var(--text)}
+
+/* ---- Usage heatmap (Codex CLI style) ---- */
+.hm-shell{overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.hm{font-family:ui-monospace,"SFMono-Regular",Consolas,"Menlo",monospace}
+.hm-monthwrap{position:relative;height:18px;margin-bottom:6px}
+.hm-month{position:absolute;top:0;font-size:11px;line-height:18px;color:var(--muted2);white-space:nowrap}
+.hm-gridwrap{display:flex;align-items:flex-start}
+.hm-rows{display:flex;flex-direction:column;gap:4px;margin-right:9px}
+.hm-rows span{height:12px;line-height:12px;width:20px;text-align:right;font-size:10px;color:var(--muted2);flex:none}
+.hm-week{display:flex;flex-direction:column;gap:4px;flex:none}
+.hm-cell{width:12px;height:12px;border-radius:3px;background:var(--highlight);flex:none;transition:transform .08s}
+.hm-cell:hover{transform:scale(1.2)}
+.hm-cell.lv1{background:color-mix(in srgb,var(--accent) 22%,var(--surface-sunken))}
+.hm-cell.lv2{background:color-mix(in srgb,var(--accent) 42%,var(--surface-sunken))}
+.hm-cell.lv3{background:color-mix(in srgb,var(--accent) 68%,var(--surface-sunken))}
+.hm-cell.lv4{background:var(--accent)}
+.hm-footer{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-top:14px}
+.hm-legend{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);white-space:nowrap}
+.hm-legend .swatch{width:12px;height:12px;border-radius:3px;flex:none}
+.hm-legend .swatch.lv0{background:var(--highlight);border:1px solid var(--border-muted)}
+.hm-legend .swatch.lv1{background:color-mix(in srgb,var(--accent) 22%,var(--surface-sunken))}
+.hm-legend .swatch.lv2{background:color-mix(in srgb,var(--accent) 42%,var(--surface-sunken))}
+.hm-legend .swatch.lv3{background:color-mix(in srgb,var(--accent) 68%,var(--surface-sunken))}
+.hm-legend .swatch.lv4{background:var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--border-subtle);border-radius:9px;padding:2px;gap:2px;background:var(--surface-sunken)}
+.seg button{min-height:30px;padding:0 12px;border:0;border-radius:7px;background:transparent;color:var(--muted);font-size:12px;font-weight:600;line-height:1}
+.seg button:hover{color:var(--text);background:var(--highlight)}
+.seg button.active{color:var(--heading);background:var(--highlight-strong)}
+.hm-stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-subtle)}
+.hm-stat{display:flex;flex-direction:column;gap:3px;min-width:120px}
+.hm-stat small{font-size:11px;color:var(--muted);line-height:1.4}
+.hm-stat strong{font-family:var(--font-ui,ui-monospace,"SFMono-Regular",Consolas,monospace);font-size:15px;color:var(--heading);font-weight:600;letter-spacing:-.01em}
+.hm-stat strong .hat{font-size:11px;color:var(--muted);font-weight:500;margin-left:5px}
+
+@media(max-width:860px){
+  .overview-grid,.kpi-grid{grid-template-columns:1fr}
+  .account-banner{flex-direction:column;align-items:flex-start}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:640px){
+  .appbar{height:auto;flex-wrap:wrap;padding:10px 14px;gap:10px}
+  .appbar .spacer{display:none}
+  .appbar nav{order:3;width:100%;margin-left:0}
+  .appbar nav a{flex:1;justify-content:center}
+  .account-actions{width:100%}
+  .account-actions .btn{flex:1;justify-content:center}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .turn-row{grid-template-columns:1fr 1fr;row-gap:4px}
+  .turn-row span{text-align:left}
+  .turn-head{display:none}
+}
 </style>
 </head>
-<body>
-<main class="shell">
-  <div class="topbar"><div class="wordmark">AstrBot <span>· Codex</span></div><nav class="nav"><a data-local-tab="overview" class="active" href="#overview">概览</a><a data-local-tab="settings" href="#settings">设置</a><button id="themeToggle" class="theme-toggle" type="button">亮色模式</button></nav></div>
-  <div id="overviewPanel">
-  <section id="setupPanel" class="setup-card" hidden>
-    <h2>欢迎使用 ChatGPT Codex</h2>
-    <p>首次使用只需完成两步：确认 Codex 可执行文件，再登录你的 ChatGPT 账号。插件会保留自动查找能力；只有检测不到时才需要填写路径。</p>
-    <div class="setup-steps"><div class="setup-step"><strong>1 · 检查 Codex</strong><span>优先从 PATH 自动查找 codex，也支持填写绝对路径。</span></div><div class="setup-step"><strong>2 · 保存设置</strong><span>登录方式和 Codex 路径会保存到 AstrBot 配置。</span></div><div class="setup-step"><strong>3 · 完成 OAuth</strong><span>浏览器跳转 localhost 时，可把完整回调地址粘贴回来。</span></div></div>
-    <div class="setup-grid"><div class="setup-field"><label for="setupCodexPath">Codex 可执行文件</label><input id="setupCodexPath" type="text" autocomplete="off" placeholder="codex"><small>普通安装推荐保持为 codex。Docker 用户请填写容器内路径，不要填写宿主机路径；详细示例见 README。</small></div><div class="setup-field"><label for="setupLoginMode">首次登录方式</label><select id="setupLoginMode"><option value="browser">浏览器 OAuth（推荐）</option><option value="device_code">Device Code（远程服务器）</option></select><small>Device Code 不要求服务器直接打开浏览器。</small></div><div class="setup-field"><label for="setupProxy">显式网络代理</label><input id="setupProxy" type="text" autocomplete="off" placeholder="留空则使用系统代理"><small>显式代理优先；留空时由“使用系统代理”继承 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY。</small></div><div class="setup-field"><label class="check-line"><input id="setupUseSystemProxy" type="checkbox" checked>使用系统代理</label><small>同时用于推理、OAuth token exchange 和 Device Code。Docker 必须把代理变量传入容器。</small></div></div>
-    <div id="setupDetection" class="setup-detection" role="status" aria-live="polite"><strong>检测中</strong><span>正在检查 Codex 可执行文件…</span></div>
-    <div id="setupDockerHint" class="setup-docker" hidden>检测到当前 AstrBot 运行在 Docker 中。请使用容器内的 Codex 路径；宿主机的 /usr/bin/codex 或 /usr/lib/node_modules 路径在容器内不可见。请参考 README 的 Docker 部署指引。</div>
-    <div class="setup-actions"><button id="setupSave" class="button" type="button">保存 Codex 设置</button><button id="setupLogin" class="button primary" type="button">保存并开始 ChatGPT 登录</button><span id="setupHint" class="hint">登录成功后此欢迎页会自动收起。</span></div>
+<body data-od-id="account-page">
+<header class="appbar" data-od-id="app-bar">
+  <div class="brand"><span class="dot">A</span>AstrBot <span>· Codex</span></div>
+  <nav>
+    <a href="/#/plugin-page/astrbot_plugin_chatgpt_codex/account" target="_top" class="active" data-od-id="nav-overview">概览</a>
+    <a href="/#/plugin-page/astrbot_plugin_chatgpt_codex/settings" target="_top" data-od-id="nav-settings">设置</a>
+  </nav>
+  <div class="spacer"></div>
+  <span id="connChip" class="conn-chip off"><i></i><span id="connLabel">连接中…</span></span>
+  <button id="themeToggle" class="theme-toggle" type="button" data-od-id="theme-toggle">暗色模式</button>
+</header>
+
+<main class="page-section">
+  <div id="previewNotice" class="preview-notice" hidden data-od-id="preview-notice"><b>预览模式：</b>AstrBot 插件桥接未加载。以下各区域展示的是空状态与布局骨架；部署到插件页后会实时读取真实账号、配额与用量。</div>
+
+  <!-- Setup welcome card -->
+  <section id="setupPanel" class="card" hidden>
+    <div class="card-head"><div><h2>欢迎使用 ChatGPT Codex</h2><p>首次使用只需完成两步：确认 Codex 可执行文件，再登录你的 ChatGPT 账号。插件会保留自动查找能力；只有检测不到时才需要填写路径。</p></div><span class="caption warn">首次设置</span></div>
+    <div class="info-row"><span>Codex 可执行文件</span><input id="setupCodexPath" type="text" autocomplete="off" placeholder="codex" data-od-id="setup-codex-path"></div>
+    <div class="info-row"><span>首次登录方式</span><select id="setupLoginMode"><option value="browser">浏览器 OAuth（推荐）</option><option value="device_code">Device Code（远程服务器）</option></select></div>
+    <div id="setupDetection" class="state-line" data-od-id="setup-detection"><span class="spinner"></span><span>正在检查 Codex 可执行文件…</span></div>
+    <div class="account-actions" style="margin-top:16px"><button id="setupSave" class="btn" type="button">保存 Codex 设置</button><button id="setupLogin" class="btn primary" type="button">保存并开始 ChatGPT 登录</button></div>
   </section>
-  <header class="profile-head">
-    <div class="profile-copy"><div class="profile-kicker">CHATGPT CODEX</div><h1 id="profileName" class="profile-name">ChatGPT Codex</h1><div class="profile-sub"><span id="profileAccount">尚未登录</span><span>·</span><span id="profilePlan" class="plan-badge">Plus</span></div></div>
-    <div class="head-actions"><button id="login" class="button primary">使用 ChatGPT 登录</button><button id="refresh" class="button">刷新概览</button><button id="logout" class="button danger">退出登录</button></div>
-  </header>
-  <div id="message" class="message" role="status" aria-live="polite"></div>
-  <div id="loginFlow" class="login-flow">
-      <p id="loginHint">浏览器授权完成后，如果浏览器跳转到 localhost 地址但服务器未自动完成登录，请将地址栏中的完整回调链接粘贴到下面。</p>
-      <div id="browserLoginBox"><div class="actions"><a id="openAuth" class="button primary" href="#" target="_blank" rel="noopener noreferrer">打开授权页</a></div></div>
-      <textarea id="authUrl" readonly aria-label="授权链接"></textarea>
-      <div id="deviceCodeBox" hidden><p>请打开以下验证地址，并输入一次性验证码：</p><div class="actions"><a id="deviceVerification" class="button primary" href="#" target="_blank" rel="noopener noreferrer">打开 Device Code 验证页</a></div><p><strong id="deviceCode"></strong></p></div>
-      <div id="callbackForm"><textarea id="callbackUrl" aria-label="localhost 回调链接" placeholder="http://localhost:xxxxx/auth/callback?code=...&state=..."></textarea><div class="actions"><button id="submitCallback" class="button primary">提交完整 localhost 回调</button></div></div>
-      <div class="actions"><button id="closeLogin" class="button">关闭</button></div>
-  </div>
-  <section class="stats">
-    <div class="stat"><div id="statTokens" class="stat-value">—</div><div class="stat-label">剩余配额</div></div>
-    <div class="stat"><div id="statReset" class="stat-value">—</div><div class="stat-label">距离重置</div></div>
-    <div class="stat"><div id="statModels" class="stat-value">—</div><div class="stat-label">可用模型</div></div>
-    <div class="stat"><div id="statProcess" class="stat-value">—</div><div class="stat-label">服务状态</div></div>
-  </section>
-  <section id="quotaActivity" class="section">
-    <div class="section-title"><div><h2>使用量活动</h2><p>按本地记录展示已完成 Codex turn 的 Token 使用情况。</p></div></div>
-    <div class="activity-card"><div id="activityGrid" class="activity-grid"></div><div class="activity-legend"><span id="activityHint">等待读取 Codex 配额…</span><span class="legend-swatches"><i></i><i></i><i></i><i></i><i></i></span></div></div>
-  </section>
-  <section class="section overview-grid">
-    <article class="info-card"><h3>活动洞察</h3><div class="info-list"><div class="info-row"><span>主配额窗口</span><strong id="quotaWindow">—</strong></div><div class="info-row"><span>已使用</span><strong id="quotaUsed">—</strong></div><div class="quota-track"><span id="quotaBar"></span></div><div class="quota-meta"><span>0%</span><span id="quotaReset">重置：—</span><span>100%</span></div><div class="info-row"><span>Credits</span><strong id="quotaCredits">—</strong></div></div></article>
-    <article class="info-card"><h3>账户状态</h3><div class="info-list"><div class="info-row"><span>推理后端</span><strong id="serverStatus">—</strong></div><div class="info-row"><span>套餐</span><strong id="accountPlan">—</strong></div><div class="info-row"><span>当前模型</span><strong id="currentModel">auto</strong></div><div class="info-row"><span>推理强度</span><strong id="currentEffort">auto</strong></div><div class="info-row"><span>可用重置次数</span><strong id="resetCredits">—</strong></div></div></article>
-  </section>
-  <section class="section"><div class="section-title"><div><h2>服务端模型</h2><p>模型列表和推理强度由当前 Codex 后端动态提供。</p></div><a data-local-tab="settings" class="button" href="#settings">管理设置</a></div><div class="info-card"><div id="models" class="model-list"><div class="model-row"><span>等待读取模型…</span></div></div></div></section>
-  </div>
-  <section id="usagePanel" class="section settings-panel" hidden>
-    <div class="section-title"><div><h2>使用量</h2><p>仅统计插件安装后，Codex 返回的真实 turn 使用量。</p></div><div class="usage-periods"><button data-usage-days="365" class="active">一年</button></div></div>
-    <div class="usage-summary"><article class="usage-kpi"><strong id="usageToday">—</strong><span>今日 Token</span></article><article class="usage-kpi"><strong id="usage7d">—</strong><span>近 7 日</span></article><article class="usage-kpi"><strong id="usage30d">—</strong><span>近 30 日</span></article><article class="usage-kpi"><strong id="usageTotal">—</strong><span>当前范围合计</span></article><article class="usage-kpi"><strong id="usageCacheHit">—</strong><span>缓存命中 Token</span></article><article class="usage-kpi"><strong id="usageCacheRate">—</strong><span>缓存命中率</span></article></div>
-    <section class="section"><div class="section-title"><div><h2>Token 活动</h2><p id="usageTrackingHint">等待读取本地用量记录…</p></div><span class="usage-meta">少 <span class="usage-legend"><i></i><i></i><i></i><i></i><i></i><i></i></span> 多</span></div><div class="activity-card"><div id="usageMonths" class="usage-months"></div><div class="usage-grid-wrap"><div id="usageGrid" class="usage-grid"></div></div><div class="usage-meta"><span>每天一个方格，悬停可查看精确数值。</span><span id="usageTimezone">—</span></div></div></section>
-    <section class="section usage-columns"><article class="info-card"><h3>Token 明细</h3><p class="usage-note">Processed total 使用服务端累计值转出的增量；缓存输入属于输入，推理属于输出分项。</p><div class="usage-table"><div class="usage-table-row"><span>输入</span><span id="usageInput">—</span></div><div class="usage-table-row"><span>缓存输入（子集）</span><span id="usageCached">—</span></div><div class="usage-table-row"><span>输出</span><span id="usageOutput">—</span></div><div class="usage-table-row"><span>推理（输出分项）</span><span id="usageReasoning">Unavailable</span></div><div class="usage-table-row"><span>请求数</span><span id="usageRequests">—</span></div></div></article><article class="info-card"><h3>按模型统计</h3><div id="usageModels" class="usage-table"><div class="usage-table-row"><span>—</span><span>—</span></div></div></article></section>
-    <section class="section"><article class="info-card"><h3>最近 Turn</h3><p class="usage-note">只显示脱敏后的数值，不显示提示词、回复或隐藏推理。</p><div id="usageTurns" class="usage-turns"><div class="usage-note">尚无已记录的 Turn。</div></div></article></section>
-    <section class="section"><div class="section-title"><div><h2>官方配额</h2><p>此处是 Codex 账户窗口，与本地 Token 使用量分开显示。</p></div><button id="usageRateRefresh" class="button">刷新</button></div><article class="info-card"><div id="usageRateLimits"><div class="usage-rate-row"><div><strong>—</strong><span>—</span></div></div></div></article></section>
-  </section>
-  <section id="settingsPanel" class="section settings-panel" hidden>
-    <div class="section-title"><div><h2>插件设置</h2><p>在当前插件页内直接管理 Codex 后端、模型选择和安全策略。</p></div><span class="pill ok">本地设置页</span></div>
-    <div class="settings-card">
-      <form id="embeddedSettingsForm"><div class="settings-grid">
-        <div class="setting setting-wide"><label for="embedded_codex_path">Codex 可执行文件</label><input id="embedded_codex_path" data-embedded-setting="codex_path" type="text" autocomplete="off"><small>命令名或绝对路径，例如 codex。</small></div>
-        <div class="setting"><label for="embedded_backend_mode">推理后端</label><select id="embedded_backend_mode" data-embedded-setting="backend_mode"><option value="transport">Responses Transport（推荐）</option><option value="app_server">App Server（稳定回退）</option><option value="auto">自动回退</option></select><small>推荐使用 Transport：不创建 Codex thread/turn，适合 AstrBot 轻量聊天；App Server 是稳定兼容回退，auto 会在鉴权、模型、协议或限流错误时回退 App Server。</small></div>
-        <div class="setting"><label for="embedded_transport_proxy">显式网络代理</label><input id="embedded_transport_proxy" data-embedded-setting="transport_proxy" type="text" autocomplete="off" placeholder="留空则使用系统代理"><small>显式代理优先；留空时使用 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY。</small></div>
-        <div class="setting"><label class="check-line"><input id="embedded_use_system_proxy" data-embedded-setting="use_system_proxy" type="checkbox">使用系统代理</label><small>同时用于推理、OAuth token exchange 和 Device Code。</small></div>
-        <div class="setting"><label for="embedded_login_mode">登录方式</label><select id="embedded_login_mode" data-embedded-setting="login_mode"><option value="browser">浏览器 OAuth（推荐）</option><option value="device_code">Device Code（无图形服务器）</option></select></div>
-        <div class="setting"><label for="embedded_default_model">默认模型</label><input id="embedded_default_model" data-embedded-setting="default_model" type="text" autocomplete="off"><small>auto 使用服务端默认模型。</small></div>
-        <div class="setting"><label for="embedded_reasoning_effort">推理强度</label><input id="embedded_reasoning_effort" data-embedded-setting="reasoning_effort" type="text" autocomplete="off"><small>以当前模型实际支持项为准。</small></div>
-        <div class="setting"><label for="embedded_harness_mode">Agent 外壳</label><select id="embedded_harness_mode" data-embedded-setting="harness_mode"><option value="lightweight">轻量聊天（推荐）</option><option value="codex">Codex 原生 coding-agent</option></select><small>轻量模式使用短 baseInstructions，适合 AstrBot 普通聊天并减少固定上下文。</small></div>
-        <div class="setting"><label for="embedded_tool_router">AstrBot 工具路由</label><select id="embedded_tool_router" data-embedded-setting="tool_router"><option value="minimal">按需（推荐）</option><option value="none">不提供动态工具</option><option value="all">全部已注册工具</option></select><small>当前 MVP 不注册本地工具；为后续 ToolBridge 预留。</small></div>
-        <div class="setting"><label for="embedded_max_concurrent_turns">最大并发 turn</label><input id="embedded_max_concurrent_turns" data-embedded-setting="max_concurrent_turns" type="number" min="1" max="32" step="1"></div>
-        <div class="setting"><label for="embedded_turn_timeout">单 turn 超时（秒）</label><input id="embedded_turn_timeout" data-embedded-setting="turn_timeout" type="number" min="30" max="3600" step="1"></div>
-        <div class="setting"><label for="embedded_max_thread_turns">单 thread 最大 turn</label><input id="embedded_max_thread_turns" data-embedded-setting="max_thread_turns" type="number" min="0" max="10000" step="1"></div>
-        <div class="setting"><label for="embedded_thread_idle_ttl">thread 空闲轮换（秒）</label><input id="embedded_thread_idle_ttl" data-embedded-setting="thread_idle_ttl" type="number" min="0" max="31536000" step="1"></div>
-        <div class="setting"><label for="embedded_thread_max_age">thread 最大寿命（秒）</label><input id="embedded_thread_max_age" data-embedded-setting="thread_max_age" type="number" min="0" max="31536000" step="1"></div>
-        <div class="setting"><label for="embedded_usage_timezone">Usage 时区</label><input id="embedded_usage_timezone" data-embedded-setting="usage_timezone" type="text" autocomplete="off"><small>例如 Asia/Shanghai；用于热力图自然日。</small></div>
-        <div class="setting"><label for="embedded_usage_retention_days">Usage 保留天数</label><input id="embedded_usage_retention_days" data-embedded-setting="usage_retention_days" type="number" min="0" max="3650" step="1"><small>0 表示永久保留，每天最多自动清理一次。</small></div>
-        <div class="setting-toggle"><input id="embedded_usage_debug" data-embedded-setting="usage_debug" type="checkbox"><label for="embedded_usage_debug">启用 Usage 数值诊断</label></div>
-        <div class="setting setting-wide"><label>行为与安全</label><div class="settings-grid"><div class="setting-toggle"><input id="embedded_streaming" data-embedded-setting="streaming" type="checkbox"><label for="embedded_streaming">启用流式调用</label></div><div class="setting-toggle"><input id="embedded_show_tool_status" data-embedded-setting="show_tool_status" type="checkbox"><label for="embedded_show_tool_status">显示安全工具状态</label></div><div class="setting-toggle"><input id="embedded_force_http_transport" data-embedded-setting="force_http_transport" type="checkbox"><label for="embedded_force_http_transport">强制 HTTPS 传输</label></div><div class="setting-toggle"><input id="embedded_enable_local_codex_tools" data-embedded-setting="enable_local_codex_tools" type="checkbox"><label for="embedded_enable_local_codex_tools">允许本机 Codex 工具</label></div></div></div>
-      </div><div class="settings-actions"><span id="embeddedSettingsHint" class="settings-hint">切换到设置页时自动读取。</span><button id="embeddedSaveSettings" class="button primary" type="submit">保存设置</button></div></form><div id="embeddedSettingsState" class="settings-state" role="status" aria-live="polite"></div>
+
+  <!-- Account banner -->
+  <section class="account-banner card" data-od-id="account-banner">
+    <div class="account-copy">
+      <span class="kicker">CHATGPT CODEX</span>
+      <h1 id="accountName" class="account-name">ChatGPT Codex</h1>
+      <div class="account-sub">
+        <span id="accountEmail">尚未登录</span>
+        <span class="sep">·</span>
+        <span id="accountPlan" class="plan-badge">未登录</span>
+        <span class="sep">·</span>
+        <span id="connState" class="account-sub"><i class="stat-dot off"></i><span>未连接</span></span>
+      </div>
+    </div>
+    <div class="account-actions">
+      <button id="login" class="btn primary" type="button" data-od-id="cta-login">使用 ChatGPT 登录</button>
+      <button id="refresh" class="btn" type="button" data-od-id="btn-refresh">刷新概览</button>
+      <button id="logout" class="btn danger" type="button" data-od-id="btn-logout">退出登录</button>
     </div>
   </section>
-  <div class="privacy">🔒 仅显示公开账号元数据和配额摘要；不展示 token、Cookie、隐藏推理或本机工具内容。</div>
+
+  <div id="message" class="message" role="status" aria-live="polite"></div>
+
+  <!-- Login flow -->
+  <section id="loginFlow" class="login-flow" hidden data-od-id="login-flow">
+    <div class="inner">
+      <p id="loginHint" class="hint">浏览器授权完成后，如果浏览器跳转到 localhost 地址但服务器未自动完成登录，请将地址栏中的完整回调链接粘贴到下面。</p>
+      <div id="browserLoginBox" class="actions"><a id="openAuth" class="btn primary" href="#" target="_blank" rel="noopener noreferrer">打开授权页</a></div>
+      <textarea id="authUrl" readonly aria-label="授权链接" hidden></textarea>
+      <div id="deviceCodeBox" hidden>
+        <p class="hint">请打开以下验证地址，并输入一次性验证码：</p>
+        <div class="actions"><a id="deviceVerification" class="btn primary" href="#" target="_blank" rel="noopener noreferrer">打开 Device Code 验证页</a></div>
+        <div id="deviceCode" class="device-code"></div>
+      </div>
+      <div id="callbackForm" class="flow-divider">
+        <p class="flow-title">提交完整 localhost 回调</p>
+        <textarea id="callbackUrl" aria-label="localhost 回调链接" placeholder="http://localhost:xxxxx/auth/callback?code=...&state=..."></textarea>
+        <div class="actions"><button id="submitCallback" class="btn primary" type="button">提交完整 localhost 回调</button></div>
+      </div>
+      <div class="actions"><button id="closeLogin" class="btn ghost" type="button">关闭</button></div>
+    </div>
+  </section>
+
+  <!-- Quota card (Codex-style usage) -->
+  <section class="card" data-od-id="quota-card">
+    <div class="card-head"><div><h2>用量</h2><p>ChatGPT Codex 计划在本地应用的实时用量窗口，与下方的本地 Token 使用统计分开显示。</p></div><span class="caption" id="quotaWindowName">5 小时滚动窗口</span></div>
+    <div class="usage-hero">
+      <div class="usage-big" id="quotaRemaining">—<small>当前窗口已使用</small></div>
+      <div class="usage-side">
+        <div><span class="pill" id="quotaUsed">—</span><span class="pill-label"> 已使用</span></div>
+        <div class="usage-line"><span>窗口配额</span><strong id="quotaWindow">—</strong></div>
+        <div class="usage-line"><span>可用重置次数</span><strong id="resetCredits">—</strong></div>
+      </div>
+    </div>
+    <div class="track track-lg"><span id="quotaBar" style="width:0%"></span></div>
+    <div class="quota-meta"><span>0%</span><span id="quotaReset">重置倒计时：—</span><span>100%</span></div>
+    <div class="info-list" style="margin-top:16px">
+      <div class="info-row"><span>剩余可用</span><strong id="quotaRemainingPct">—</strong></div>
+      <div class="info-row"><span>重置倒计时</span><strong id="quotaCountdown">—</strong></div>
+      <div class="info-row"><span>Credits</span><strong id="quotaCredits">—</strong></div>
+    </div>
+  </section>
+
+  <!-- Usage summary -->
+  <section class="card" data-od-id="usage-summary">
+    <div class="card-head"><div><h2>Usage 汇总</h2><p>仅统计插件安装后，Codex 返回的真实 turn 使用量（本地数据）。</p></div><button id="usageRefresh" class="btn sm" type="button">刷新</button></div>
+    <div class="kpi-grid">
+      <div class="kpi"><strong id="usageToday">—</strong><span>今日 Token</span></div>
+      <div class="kpi"><strong id="usage7d">—</strong><span>近 7 日</span></div>
+      <div class="kpi"><strong id="usage30d">—</strong><span>近 30 日</span></div>
+      <div class="kpi"><strong id="usageTotal">—</strong><span>当前范围合计</span></div>
+      <div class="kpi"><strong id="usageCacheHit">—</strong><span>缓存命中 Token</span></div>
+      <div class="kpi"><strong id="usageCacheRate">—</strong><span>缓存命中率</span></div>
+    </div>
+    <div id="usageMeta" class="state-line" style="margin-top:16px"><span>等待读取本地用量记录…</span></div>
+  </section>
+
+  <!-- Usage heatmap (Codex Profile token activity style) -->
+  <section class="card" data-od-id="usage-heatmap">
+    <div class="card-head"><div><h2>用量趋势</h2><p>服务端每日用量，52 周窗口，按个人峰值四档着色；无记录的日期显示灰格。</p></div><span class="caption" id="hmCaption">每日</span></div>
+    <div class="hm-shell">
+      <div class="hm">
+        <div class="hm-monthwrap" id="hmMonths"></div>
+        <div class="hm-gridwrap">
+          <div class="hm-rows" id="hmRows"></div>
+          <div id="hmGrid" style="display:flex;gap:4px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="hm-stats">
+      <div class="hm-stat"><small>生命周期总用量</small><strong id="hmLifetime">—</strong></div>
+      <div class="hm-stat"><small>单日峰值</small><strong id="hmPeak">—</strong></div>
+      <div class="hm-stat"><small>连续使用</small><strong id="hmStreak">—</strong></div>
+    </div>
+    <div class="hm-footer">
+      <div class="hm-legend"><span>更少</span><span class="swatch lv0"></span><span class="swatch lv1"></span><span class="swatch lv2"></span><span class="swatch lv3"></span><span class="swatch lv4"></span><span>更多</span></div>
+      <div class="seg" role="group" aria-label="用量视角">
+        <button type="button" class="active" data-hm-mode="daily" data-od-id="hm-mode-daily">每日</button>
+        <button type="button" data-hm-mode="weekly" data-od-id="hm-mode-weekly">每周</button>
+        <button type="button" data-hm-mode="cumulative" data-od-id="hm-mode-cumulative">累计</button>
+      </div>
+    </div>
+    <div id="hmState" class="state-line" style="margin-top:12px"><span>等待读取每日用量记录…</span></div>
+  </section>
+
+  <div class="overview-grid">
+    <!-- Token detail -->
+    <section class="card" data-od-id="token-detail">
+      <div class="card-head"><div><h2>Token 明细</h2><p>缓存输入属于输入，推理属于输出分项。</p></div></div>
+      <div class="info-list" id="tokenDetail">
+        <div class="info-row"><span>输入</span><strong id="usageInput">—</strong></div>
+        <div class="info-row"><span>缓存输入（子集）</span><strong id="usageCached">—</strong></div>
+        <div class="info-row"><span>输出</span><strong id="usageOutput">—</strong></div>
+        <div class="info-row"><span>推理（输出分项）</span><strong id="usageReasoning">—</strong></div>
+        <div class="info-row"><span>请求数</span><strong id="usageRequests">—</strong></div>
+      </div>
+    </section>
+
+    <!-- Server status -->
+    <section class="card" data-od-id="server-status">
+      <div class="card-head"><div><h2>运行状态</h2><p>服务端模型与当前推理后端。</p></div></div>
+      <div class="info-list">
+        <div class="info-row"><span>推理后端</span><strong id="serverStatus">—</strong></div>
+        <div class="info-row"><span>当前模型</span><strong id="currentModel">auto</strong></div>
+        <div class="info-row"><span>推理强度</span><strong id="currentEffort">auto</strong></div>
+        <div class="info-row"><span>可用模型</span><strong id="statModels">—</strong></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Recent requests -->
+  <section class="card" data-od-id="recent-requests">
+    <div class="card-head"><div><h2>最近请求</h2><p>只显示脱敏后的数值，不显示提示词、回复或隐藏推理。</p></div></div>
+    <div id="usageTurns" class="turns">
+      <div class="turn-row turn-head"><strong>模型 · 日期</strong><span>输入</span><span>缓存</span><span>命中率</span><span>输出</span><span>总计</span></div>
+      <div class="state-line"><span>尚无已记录的 Turn。</span></div>
+    </div>
+  </section>
+
+  <!-- Server models -->
+  <section class="card" data-od-id="server-models">
+    <div class="card-head"><div><h2>服务端模型</h2><p>模型列表和推理强度由当前 Codex 后端动态提供。</p></div><a href="/#/plugin-page/astrbot_plugin_chatgpt_codex/settings" target="_top" class="btn sm ghost" data-od-id="manage-settings">管理设置</a></div>
+    <div id="models" class="model-list"><div class="state-line"><span>等待读取模型…</span></div></div>
+  </section>
+
+  <div class="privacy" data-od-id="privacy-note"><b>隐私提示：</b>仅显示公开账号元数据和配额摘要，不展示 token、Cookie、access/refresh token 或隐藏推理。</div>
 </main>
+
 <script>
 (()=> {
-  const page=window.AstrBotPluginPage,$=id=>document.getElementById(id);
-  let pollTimer=null,refreshBusy=false,detectedCodexPath="codex",detectedLoginMode="browser";
-  const message=(text,kind="")=>{const n=$("message");n.textContent=text||"";n.className="message "+kind};
-  function errorText(e){const t=String(e?.message||e||"插件请求失败");return /\b(401|unauthori[sz]ed)\b/i.test(t)||/token.*(expired|invalid)/i.test(t)?"AstrBot WebUI 会话未授权或已过期，请先登录管理界面后刷新此页面。":t}
-  async function call(endpoint,body){return body===undefined?await page.apiGet(endpoint):await page.apiPost(endpoint,body)}
-  async function callGet(endpoint,params){return await page.apiGet(endpoint,params)}
-  function dataOf(r){if(r?.status==="error")throw new Error(r.message||"插件请求失败");return r?.status==="ok"?(r.data||{}):(r||{})}
-  function durationText(m){const v=Number(m);if(!Number.isFinite(v)||v<=0)return"—";if(v%(60*24*7)===0)return(v/(60*24*7))+" 周";if(v%(60*24)===0)return(v/(60*24))+" 天";if(v%60===0)return(v/60)+" 小时";return v+" 分钟"}
-  function dateText(s){const v=Number(s);return Number.isFinite(v)&&v>0?new Date(v*1000).toLocaleString("zh-CN",{year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—"}
-  function remainingText(s){const v=Number(s);if(!Number.isFinite(v)||v<=0)return"—";const d=Math.max(0,v-Date.now()/1000),days=Math.floor(d/86400),hours=Math.floor(d%86400/3600),mins=Math.floor(d%3600/60);return days?days+"天":hours?hours+"小时":mins+"分钟"}
-  function percent(v){const n=Number(v);return Number.isFinite(n)?Math.max(0,Math.min(100,n)):0}
-  function renderAvatar(account){const url=typeof account.avatarUrl==="string"&&/^https:\/\//i.test(account.avatarUrl)?account.avatarUrl:"";const img=$("avatarImage"),initial=$("avatarInitial");if(!img||!initial)return;if(!url){img.hidden=true;img.removeAttribute("src");initial.hidden=false;return}img.onload=()=>{img.hidden=false;initial.hidden=true};img.onerror=()=>{img.hidden=true;initial.hidden=false;img.removeAttribute("src")};img.hidden=true;img.src=url}
-  function renderSetup(d){const panel=$("setupPanel");if(!panel)return;const codex=d.codex||{},account=d.account||{},connected=Boolean(account.email||account.type);detectedCodexPath=String(codex.configured||"codex");detectedLoginMode=d.login_mode==="device_code"?"device_code":"browser";const show=d.setup_completed!==true||!connected||d.auth_required===true;panel.hidden=!show;if(!show)return;const path=$("setupCodexPath"),mode=$("setupLoginMode"),detection=$("setupDetection"),docker=$("setupDockerHint");if(path&&document.activeElement!==path)path.value=detectedCodexPath;if(mode&&d.login_mode)mode.value=String(d.login_mode);if(detection){detection.className="setup-detection "+(codex.available?"ok":"error");const title=codex.available?"Codex 已找到":"未找到 Codex";const detail=codex.available?(codex.resolved||codex.configured||"codex"):(codex.error||"请填写可执行文件名或绝对路径");detection.textContent="";const strong=document.createElement("strong"),span=document.createElement("span");strong.textContent=title;span.textContent=detail;detection.append(strong,span)}if(docker)docker.hidden=codex.environment!=="docker"}
-  function renderStatus(d){const a=d.account||{},connected=Boolean(a.email||a.type),transport=d.backend_mode==="transport",processLabel=transport?"Responses Transport":(d.process||"—");renderSetup(d);$("profileName").textContent=connected?(a.email||"ChatGPT Codex"):"ChatGPT Codex";$("profileAccount").textContent=connected?(a.email||"ChatGPT 账号已连接"):"尚未登录";$("profilePlan").textContent=a.planType||"未登录";$("accountPlan").textContent=a.planType||"—";$("serverStatus").textContent=processLabel;$("currentModel").textContent=d.model||"auto";$("currentEffort").textContent=d.effort||"auto";$("statProcess").textContent=transport?"正常":(d.process==="healthy"?"正常":d.process||"—");$("login").textContent=connected?"重新登录":"使用 ChatGPT 登录";if(d.login_error&&!connected)message(String(d.login_error),"error");renderAvatar(a);return connected}
-  function renderModels(d){const n=$("models");n.textContent="";const list=(d.models||[]).filter(m=>!m.hidden);$("statModels").textContent=String(list.length);if(!list.length){n.textContent="服务端没有返回可用模型。";return}list.slice(0,8).forEach(m=>{const row=document.createElement("div"),left=document.createElement("div"),title=document.createElement("strong"),small=document.createElement("small"),effort=document.createElement("div");row.className="model-row";title.textContent=m.displayName?m.id+" — "+m.displayName:m.id;small.textContent="服务端 model/list";left.append(title,small);effort.className="model-effort";effort.textContent=(m.reasoningEfforts||[]).join(", ")||"未声明";row.append(left,effort);n.appendChild(row)});$("currentModel").textContent=d.selectedModel||"auto";$("currentEffort").textContent=d.selectedEffort||"auto"}
-  function renderActivity(u){const n=$("activityGrid");if(!n)return;n.textContent="";const columns=52,rows=7,activeColumns=Math.round(u/100*columns),level=Math.max(1,Math.min(4,Math.ceil(u/25)));for(let column=0;column<columns;column++){for(let row=0;row<rows;row++){const cell=document.createElement("i"),active=column>=columns-activeColumns;cell.className="activity-cell"+(active?" level-"+level:"");cell.title=active?"当前配额窗口占用示意":"当前配额窗口剩余示意";n.appendChild(cell)}}if($("activityHint"))$("activityHint").textContent="当前窗口使用率 "+Math.round(u)+"%；右侧蓝色区域为当前窗口示意，不是历史 Token 记录。"}
-  function renderQuota(d){const r=d.rateLimits||{},p=r.primary;if(!p||!Number.isFinite(Number(p.usedPercent))){if($("activityHint"))$("activityHint").textContent="服务端暂未返回主配额窗口。";return}const u=percent(p.usedPercent),remaining=Math.max(0,100-u);$("statTokens").textContent=Math.round(remaining)+"%";$("statReset").textContent=remainingText(p.resetsAt);$("quotaWindow").textContent=durationText(p.windowDurationMins);$("quotaUsed").textContent=Math.round(u)+"%";$("quotaBar").style.width=u+"%";$("quotaReset").textContent="重置："+dateText(p.resetsAt);$("quotaCredits").textContent=r.credits?.unlimited?"无限":r.credits?.hasCredits?"余额 "+(r.credits.balance??"可用"):"无额外 credits";$("resetCredits").textContent=String(d.rateLimitResetCredits?.availableCount??0);renderActivity(u)}
-  async function load(silent=false){if(refreshBusy)return;refreshBusy=true;try{const results=await Promise.allSettled([call("status"),call("models"),call("quota")]);if(results[0].status==="fulfilled")renderStatus(dataOf(results[0].value));if(results[1].status==="fulfilled")renderModels(dataOf(results[1].value));if(results[2].status==="fulfilled")renderQuota(dataOf(results[2].value));const failed=results.filter(r=>r.status==="rejected");if(failed.length&&!silent)message(errorText(failed[0].reason),"error");else if(!silent)message("概览、服务端模型和配额已更新。","success")}finally{refreshBusy=false}}
-  function stop(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
-  function poll(){stop();pollTimer=setInterval(async()=>{try{const connected=renderStatus(dataOf(await call("status")));if(connected){stop();$("loginFlow").classList.remove("open");message("ChatGPT 登录已完成。","success");await load(true)}}catch{}} ,2500)}
-  function selectedLoginMode(){return $("setupLoginMode")?.value||$("embedded_login_mode")?.value||detectedLoginMode||"browser"}
-  function selectedCodexPath(){return $("setupCodexPath")?.value.trim()||$("embedded_codex_path")?.value.trim()||detectedCodexPath||"codex"}
-  function selectedProxy(){return $("setupProxy")?.value.trim()||$("embedded_transport_proxy")?.value.trim()||""}
-  function selectedUseSystemProxy(){const node=$("setupUseSystemProxy")||$("embedded_use_system_proxy");return node?Boolean(node.checked):true}
-  function renderLoginResult(d){const device=d.type==="chatgptDeviceCode",authBox=$("browserLoginBox"),callback=$("callbackForm"),deviceBox=$("deviceCodeBox"),authUrl=$("authUrl"),hint=$("loginHint");$("loginFlow").classList.add("open");authBox.hidden=device;callback.hidden=device;deviceBox.hidden=!device;authUrl.hidden=device;if(device){$("deviceVerification").href=d.verificationUrl||"#";$("deviceCode").textContent="验证码："+(d.userCode||"未返回");hint.textContent="请打开验证地址并输入一次性验证码，完成后返回此页面等待登录状态更新。";message("Device Code 登录已启动，请完成验证。")}else{authUrl.hidden=false;authUrl.value=d.authUrl||"";$("openAuth").href=d.authUrl||"#";hint.textContent="浏览器授权完成后，如果浏览器跳转到 localhost 地址但服务器未自动完成登录，请将地址栏中的完整回调链接（包括 code 和 state）粘贴到下面。";message("OAuth 已启动，请完成 ChatGPT 授权。")}}
-  async function startLogin(mode){const selected=mode==="device_code"?"device_code":"browser";await call("config",{config:{login_mode:selected,codex_path:selectedCodexPath(),transport_proxy:selectedProxy(),use_system_proxy:selectedUseSystemProxy()}});renderLoginResult(dataOf(await call("login/start",{mode:selected})));poll()}
-  async function login(){const b=$("login");b.disabled=true;try{await startLogin(selectedLoginMode())}catch(e){message(errorText(e),"error")}finally{b.disabled=false}}
-  function setupValues(){return{codex_path:selectedCodexPath(),login_mode:selectedLoginMode(),transport_proxy:selectedProxy(),use_system_proxy:selectedUseSystemProxy()}}
-  async function saveSetupValues(){const values=setupValues();const d=dataOf(await call("config",{config:values}));const detection=$("setupDetection");if(detection){detection.className="setup-detection";detection.textContent="";const strong=document.createElement("strong"),span=document.createElement("span");strong.textContent="已保存";span.textContent="Codex 设置已保存，正在使用当前环境重新检测。";detection.append(strong,span)}return d}
-  async function setupSave(){const b=$("setupSave");b.disabled=true;try{await saveSetupValues();await load(true);message("Codex 设置已保存。请确认检测结果后开始登录。","success")}catch(e){message(errorText(e),"error")}finally{b.disabled=false}}
-  async function setupLogin(){const b=$("setupLogin");b.disabled=true;try{await startLogin(selectedLoginMode())}catch(e){message(errorText(e),"error")}finally{b.disabled=false}}
-  async function submit(){const b=$("submitCallback"),url=$("callbackUrl").value.trim();if(!url){message("请粘贴完整的 localhost 回调地址（必须包含 ?code=...&state=...）。","error");return}try{const parsed=new URL(url),host=parsed.hostname.toLowerCase();if(parsed.protocol!=="http:"||!["localhost","127.0.0.1","::1","[::1]"].includes(host)||parsed.pathname!=="/auth/callback"||!parsed.searchParams.get("code")||!parsed.searchParams.get("state"))throw new Error("请粘贴完整的 http://localhost/.../auth/callback?code=...&state=... 地址，不能只粘贴路径或部分参数。")}catch(e){message(errorText(e),"error");return}b.disabled=true;$("callbackUrl").value="";try{dataOf(await call("login/callback",{callbackUrl:url}));poll();message("完整回调已交给服务器上的 Codex，正在确认登录状态…")}catch(e){message(errorText(e),"error")}finally{b.disabled=false}}
-  async function logout(){const b=$("logout");b.disabled=true;try{dataOf(await call("logout",{}));stop();await load(true);message("已退出登录。","success")}catch(e){message(errorText(e),"error")}finally{b.disabled=false}}
-  function applyTheme(theme){const value=theme==="dark"?"dark":"light";document.documentElement.dataset.theme=value;$("themeToggle").textContent=value==="dark"?"亮色模式":"暗色模式";try{localStorage.setItem("astrbot_codex_theme",value)}catch{}}
-  function initTheme(){let saved="";try{saved=localStorage.getItem("astrbot_codex_theme")||""}catch{}applyTheme(saved||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"))}
-  function applySettings(values){if(!values||typeof values!=="object")return;document.querySelectorAll("[data-embedded-setting]").forEach(node=>{const key=node.dataset.embeddedSetting;if(!(key in values))return;if(node.type==="checkbox")node.checked=Boolean(values[key]);else node.value=String(values[key]??"")});const setupProxy=$("setupProxy"),setupSystem=$("setupUseSystemProxy");if(setupProxy&&document.activeElement!==setupProxy&&"transport_proxy" in values)setupProxy.value=String(values.transport_proxy||"");if(setupSystem&&document.activeElement!==setupSystem&&"use_system_proxy" in values)setupSystem.checked=Boolean(values.use_system_proxy)}
-  async function loadEmbeddedSettings(){try{const d=dataOf(await call("config"));applySettings(d.config||{});$("embeddedSettingsHint").textContent="已读取当前配置。";$("embeddedSettingsState").textContent="设置已读取";$("embeddedSettingsState").className="settings-state success"}catch(e){$("embeddedSettingsState").textContent=errorText(e);$("embeddedSettingsState").className="settings-state error"}}
-  async function saveEmbeddedSettings(event){event.preventDefault();const button=$("embeddedSaveSettings"),values={};document.querySelectorAll("[data-embedded-setting]").forEach(node=>{values[node.dataset.embeddedSetting]=node.type==="checkbox"?node.checked:node.type==="number"?Number(node.value):node.value.trim()});button.disabled=true;try{const d=dataOf(await call("config",{config:values}));applySettings(d.config||values);$("embeddedSettingsHint").textContent=d.restartRequired?"设置已保存；部分进程设置将在重启 AstrBot 后生效。":"设置已保存并立即生效。";$("embeddedSettingsState").textContent="已保存";$("embeddedSettingsState").className="settings-state success"}catch(e){$("embeddedSettingsState").textContent=errorText(e);$("embeddedSettingsState").className="settings-state error"}finally{button.disabled=false}}
-  function fmtTokens(value,compact=false){const n=Number(value);if(!Number.isFinite(n))return"Unavailable";if(!compact)return n.toLocaleString("en-US");if(n>=1e9)return (n/1e9).toFixed(n>=1e10?0:2).replace(/\.0+$/,"")+"B";if(n>=1e6)return (n/1e6).toFixed(n>=1e7?0:2).replace(/\.0+$/,"")+"M";if(n>=1e3)return (n/1e3).toFixed(n>=1e4?0:1).replace(/\.0+$/,"")+"K";return String(n)}
-  function cacheRate(value){const n=Number(value);return Number.isFinite(n)?(n*100).toFixed(n*100>=10?0:1)+"%":"—"}
-  function usageValue(v){return v===null||v===undefined?"Unavailable":fmtTokens(v)}
-  function renderUsageSummary(d){const today=d.today||{},last7=d.last7Days||{},last30=d.last30Days||{},w=d.window||{};$("usageToday").textContent=fmtTokens(today.total_tokens,true);$("usage7d").textContent=fmtTokens(last7.total_tokens,true);$("usage30d").textContent=fmtTokens(last30.total_tokens,true);$("usageTotal").textContent=fmtTokens(w.total_tokens,true);$("usageCacheHit").textContent=fmtTokens(w.cached_input_tokens,true);$("usageCacheRate").textContent=cacheRate(w.cache_ratio);$("usageCacheRate").title=w.input_tokens?"缓存命中 "+fmtTokens(w.cached_input_tokens)+" / 输入 "+fmtTokens(w.input_tokens):"暂无可计算的输入 Token";$("usageInput").textContent=usageValue(w.input_tokens);$("usageCached").textContent=usageValue(w.cached_input_tokens);$("usageOutput").textContent=usageValue(w.output_tokens);$("usageReasoning").textContent=usageValue(w.reasoning_tokens);$("usageRequests").textContent=fmtTokens(w.requests||0);$("usageTimezone").textContent=d.timezone||"—";$("usageTrackingHint").textContent=d.trackingStartedAt?"本地统计开始于 "+new Date(Number(d.trackingStartedAt)*1000).toLocaleDateString("zh-CN"):"尚无已完成 turn 的 usage 记录。";$("usageInput").title=w.cache_ratio==null?"":"缓存输入占输入 "+Math.round(Number(w.cache_ratio)*100)+"%"}
-  function renderUsageDaily(d){const list=d.daily||[],grid=$("usageGrid"),months=$("usageMonths");grid.textContent="";months.textContent="";if(!list.length){return}const first=new Date(list[0].date+"T00:00:00"),offset=(first.getDay()+6)%7,columns=Math.ceil((offset+list.length)/7);grid.style.gridTemplateColumns="repeat("+columns+",minmax(14px,1fr))";for(let i=0;i<columns*7;i++){const item=list[i-offset],cell=document.createElement("i");cell.className="usage-cell";if(item){const level=Math.max(0,Math.min(5,Number(item.level)||0)),hasUsage=Number(item.requests||0)>0||item.total_tokens!=null;if(level)cell.classList.add("level-"+level);cell.title=hasUsage?item.date+"\nTotal "+usageValue(item.total_tokens)+" tokens\nInput "+usageValue(item.input_tokens)+"\nCached "+usageValue(item.cached_input_tokens)+"\nOutput "+usageValue(item.output_tokens)+"\nReasoning "+usageValue(item.reasoning_tokens)+"\nRequests "+(item.requests||0):item.date+"\n无已记录用量";cell.dataset.date=item.date}else{cell.setAttribute("aria-hidden","true")}grid.appendChild(cell)}const labels=[];list.forEach(item=>{if(item.date.slice(8)==="01")labels.push(item.date.slice(0,7))});(labels.length?labels:[list[0].date.slice(0,7)]).forEach(label=>{const span=document.createElement("span");span.textContent=label;months.appendChild(span)})}
-  function renderUsageModels(d){const node=$("usageModels");node.textContent="";const list=d.models||[];if(!list.length){node.innerHTML='<div class="usage-table-row"><span>暂无已记录模型</span><span>—</span></div>';return}list.slice(0,12).forEach(item=>{const row=document.createElement("div"),name=document.createElement("span"),value=document.createElement("span");row.className="usage-table-row";name.textContent=item.model||"unknown";value.textContent=fmtTokens(item.total_tokens??0,true)+" · "+(item.requests||0)+" 次";row.append(name,value);node.appendChild(row)})}
-  function renderUsageRate(d){const node=$("usageRateLimits");node.textContent="";const r=d.rateLimits||{},rows=[];["primary","secondary"].forEach(key=>{const p=r[key];if(p&&Number.isFinite(Number(p.usedPercent)))rows.push([key==="primary"?"主窗口":"次窗口",Math.round(Number(p.usedPercent))+"%",p.resetsAt])});if(!rows.length){node.textContent="服务端暂未返回 rate limit 窗口。";return}rows.forEach(row=>{const item=document.createElement("div");item.className="usage-rate-row";item.innerHTML="<div><strong>"+row[0]+" · "+row[1]+"</strong><span>重置："+dateText(row[2])+"</span></div><small>此处为 account/rateLimits/read 官方窗口，不是本地 token usage。</small>";node.appendChild(item)})}
-  function renderUsageTurns(d){const node=$("usageTurns");if(!node)return;node.textContent="";const turns=Array.isArray(d.turns)?d.turns:[];if(!turns.length){node.innerHTML='<div class="usage-note">尚无已记录的 Turn。</div>';return}turns.slice(0,20).forEach(turn=>{const row=document.createElement("div"),name=document.createElement("strong"),input=document.createElement("span"),cache=document.createElement("span"),rate=document.createElement("span"),output=document.createElement("span"),total=document.createElement("span"),turnTokens=value=>value==null?"—":fmtTokens(value);row.className="usage-turn";name.textContent=(turn.model||"unknown")+" · "+(turn.local_date||"—");input.textContent="输入 "+turnTokens(turn.input_tokens);cache.textContent="缓存 "+turnTokens(turn.cached_input_tokens);rate.textContent="命中率 "+cacheRate(turn.input_tokens?Number(turn.cached_input_tokens||0)/Number(turn.input_tokens):null);output.textContent="输出 "+turnTokens(turn.output_tokens);total.textContent="总计 "+turnTokens(turn.total_tokens);row.append(name,input,cache,rate,output,total);row.title="已按本次响应的真实 usage 记录；缓存命中率=缓存输入/输入";node.appendChild(row)})}
-  async function loadUsage(silent=false){const days=Number(document.querySelector("[data-usage-days].active")?.dataset.usageDays||180);const results=await Promise.allSettled([callGet("usage/summary",{days:30}),callGet("usage/daily",{days}),callGet("usage/models",{days:30}),call("usage/rate-limits"),callGet("usage/turns",{limit:20})]);try{if(results[0].status==="fulfilled")renderUsageSummary(dataOf(results[0].value));if(results[1].status==="fulfilled")renderUsageDaily(dataOf(results[1].value));if(results[2].status==="fulfilled")renderUsageModels(dataOf(results[2].value));if(results[3].status==="fulfilled")renderUsageRate(dataOf(results[3].value));if(results[4].status==="fulfilled")renderUsageTurns(dataOf(results[4].value));if(!silent&&results.some(r=>r.status==="rejected"))message(errorText(results.find(r=>r.status==="rejected").reason),"error")}catch(e){if(!silent)message(errorText(e),"error")}}
-  function embedUsageInOverview(){const usage=$("usagePanel"),quota=$("quotaActivity");if(usage&&quota&&usage.parentElement!==$("overviewPanel")){quota.replaceWith(usage);usage.hidden=false}}
-  function switchTab(tab){const settings=tab==="settings";$("overviewPanel").hidden=settings;$("settingsPanel").hidden=!settings;document.querySelectorAll("[data-local-tab]").forEach(link=>link.classList.toggle("active",link.dataset.localTab===tab));if(settings)loadEmbeddedSettings();window.scrollTo({top:0,behavior:"smooth"})}
-  function wireTopNavigation(){document.querySelectorAll("[data-local-tab]").forEach(link=>link.addEventListener("click",event=>{event.preventDefault();switchTab(link.dataset.localTab)}));document.querySelectorAll("[data-usage-days]").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll("[data-usage-days]").forEach(item=>item.classList.toggle("active",item===button));loadUsage()}));$("usageRateRefresh").addEventListener("click",()=>loadUsage());$("embeddedSettingsForm").addEventListener("submit",saveEmbeddedSettings)}
-  $("login").onclick=login;$("setupSave").onclick=setupSave;$("setupLogin").onclick=setupLogin;$("refresh").onclick=()=>load();$("submitCallback").onclick=submit;$("closeLogin").onclick=()=>{$("loginFlow").classList.remove("open");$("callbackUrl").value="";$("deviceCodeBox").hidden=true;$("callbackForm").hidden=false;$("authUrl").hidden=false};$("logout").onclick=logout;$("themeToggle").onclick=()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
-  embedUsageInOverview();wireTopNavigation();initTheme();load();loadUsage(true);setInterval(()=>load(true),60000);setInterval(()=>{if(!$('overviewPanel').hidden)loadUsage(true)},60000);
+  "use strict";
+  const $=id=>document.getElementById(id);
+  let page=window.AstrBotPluginPage;
+  // Bridge fallback: honest, no fabricated data when running outside the plugin host.
+  if(!page){
+    page = {
+      apiGet: async ()=>{ throw new Error("AstrBot 插件桥接未加载（插件页面外预览）。"); },
+      apiPost: async ()=>{ throw new Error("AstrBot 插件桥接未加载（插件页面外预览）。"); }
+    };
+    const n=$("previewNotice"); if(n) n.hidden=false;
+  }
+  let pollTimer=null,refreshBusy=false,usageBusy=false,detectedLoginMode="browser";
+
+  function message(text,kind=""){const n=$("message");if(!n)return;n.textContent=text||"";n.className="message "+(kind||"");}
+  function errorText(e){const t=String(e?.message||e||"插件请求失败");return sanitize(t);}
+  function sanitize(t){
+    const s=String(t||"");
+    if(/\b(401|unauthori[sz]ed)\b/i.test(s)||/session.*(invalid|expired|expire|unauthor)/i.test(s)) return "AstrBot WebUI 会话未授权或已过期，请先登录管理界面后刷新此页面。";
+    if(/access[_-]?token|refresh[_-]?token|bearer|cookie|password|client_secret/i.test(s)||/["'](?:[A-Za-z0-9_-]{24,})["']/i.test(s)) return "已忽略请求中的敏感信息（token / Cookie / 凭据）。";
+    return s;
+  }
+  function call(endpoint,body){return body===undefined?page.apiGet(endpoint):page.apiPost(endpoint,body)}
+  function callGet(endpoint,params){return page.apiGet(endpoint,params)}
+  function dataOf(r){if(r&&r.status==="error")throw new Error(r.message||"插件请求失败");return r&&r.status==="ok"&&r.data!=null?r.data:(r||{});}
+  function fmtTokens(v,compact=false){const n=Number(v);if(!Number.isFinite(n))return "—";if(!compact)return n.toLocaleString("en-US");if(n>=1e9)return (n/1e9).toFixed(n>=1e10?0:2).replace(/\.0+$/,"")+"B";if(n>=1e6)return (n/1e6).toFixed(n>=1e7?0:2).replace(/\.0+$/,"")+"M";if(n>=1e3)return (n/1e3).toFixed(n>=1e4?0:1).replace(/\.0+$/,"")+"K";return String(n);}
+  function cacheRate(v){const n=Number(v);return Number.isFinite(n)?(n*100).toFixed(n*100>=10?0:1)+"%":"—";}
+  function percent(v){const n=Number(v);return Number.isFinite(n)?Math.max(0,Math.min(100,n)):0;}
+  function dateText(s){const v=Number(s);return Number.isFinite(v)&&v>0?new Date(v*1000).toLocaleString("zh-CN",{year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—";}
+  function remainingText(s){const v=Number(s);if(!Number.isFinite(v)||v<=0)return "—";const d=Math.max(0,v-Date.now()/1000),days=Math.floor(d/86400),hrs=Math.floor(d%86400/3600),mins=Math.floor(d%3600/60);return days?(days+" 天"):(hrs?(hrs+" 小时"):(mins+" 分钟"));}
+  function durationText(m){const v=Number(m);if(!Number.isFinite(v)||v<=0)return "—";if(v%(60*24*7)===0)return (v/(60*24*7))+" 周";if(v%(60*24)===0)return (v/(60*24))+" 天";if(v%60===0)return (v/60)+" 小时";return v+" 分钟";}
+  function countdownText(resetsAt){const v=Number(resetsAt);if(!Number.isFinite(v)||v<=0)return "—";const d=Math.max(0,v-Date.now()/1000),hrs=Math.floor(d/3600),mins=Math.floor(d%3600/60),secs=Math.floor(d%60);return (hrs>0?hrs+" 小时 ":"")+mins+" 分"+(hrs>0?"":" "+secs+" 秒");}
+
+  function setConn(ok,label){const c=$("connChip");if(!c)return;c.className="conn-chip "+(ok?"ok":"off");$("connLabel").textContent=label;const s=$("connState");if(s){s.className="account-sub";s.innerHTML='<i class="stat-dot'+(ok?"":" off")+'"></i><span>'+label+"</span>";}}
+  function setConnectedState(connected){$("login").textContent=connected?"重新登录":"使用 ChatGPT 登录";setConn(connected,"已连接");const badge=$("connState");if(badge&&connected){badge.innerHTML='<i class="stat-dot"></i><span>已连接</span>';}}
+  function renderSetup(d){const panel=$("setupPanel");if(!panel)return;const codex=d.codex||{},account=d.account||{},connected=Boolean(account.email||account.type);detectedLoginMode=d.login_mode==="device_code"?"device_code":"browser";const show=d.setup_completed!==true||!connected||d.auth_required===true;panel.hidden=!show;if(!show)return;const path=$("setupCodexPath"),mode=$("setupLoginMode"),det=$("setupDetection");if(path&&document.activeElement!==path&&(codex.configured||codex.resolved))path.value=String(codex.configured||codex.resolved||"codex");if(mode&&d.login_mode)mode.value=String(d.login_mode);if(det){det.className="state-line";const ok=codex.available;det.innerHTML='<span class="spinner"></span>';const span=document.createElement("span");span.textContent=(ok?"Codex 已找到：":"未找到 Codex：")+(ok?(codex.resolved||codex.configured||"codex"):(codex.error||"请填写可执行文件名或绝对路径"));det.appendChild(span);}}
+  function renderStatus(d){const a=d.account||{},connected=Boolean(a.email||a.type),transport=d.backend_mode==="transport";$("accountName").textContent=connected?(a.email||"ChatGPT Codex"):"ChatGPT Codex";$("accountEmail").textContent=connected?(a.email||"ChatGPT 账号已连接"):"尚未登录";$("accountPlan").textContent=a.planType||"未登录";setConnectedState(connected);$("serverStatus").textContent=transport?"Responses Transport":(d.process==="healthy"?"正常":(d.process||"—"));$("currentModel").textContent=d.model||"auto";$("currentEffort").textContent=d.effort||"auto";if(d.login_error&&!connected)message(sanitize(d.login_error),"error");return connected;}
+  function renderQuota(d){const box=$("quotaRemaining");if(!box)return;const r=d.rateLimits||{},p=r.primary;if(!p||!Number.isFinite(Number(p.usedPercent))){box.innerHTML="—<small>当前窗口</small>";return;}const u=percent(p.usedPercent),remaining=Math.max(0,100-u);box.innerHTML=u+"<small>当前窗口已使用</small>";$("quotaBar").style.width=u+"%";$("quotaUsed").textContent=Math.round(u)+"%";$("quotaRemainingPct").textContent=Math.round(remaining)+"%";$("quotaWindow").textContent=durationText(p.windowDurationMins);$("quotaWindowName").textContent=p.windowName||"5 小时滚动窗口";$("quotaReset").textContent="重置倒计时："+countdownText(p.resetsAt);$("quotaCountdown").textContent=countdownText(p.resetsAt);$("quotaCredits").textContent=r.credits&&r.credits.unlimited?"无限":(r.credits&&r.credits.hasCredits?"余额 "+(r.credits.balance??"可用"):"无额外 credits");$("resetCredits").textContent=String(d.rateLimitResetCredits?.availableCount??0);}
+  function renderErrorState(container,msg){if(!container)return;container.className="error-box";container.textContent=msg;}
+
+  async function load(silent=false){if(refreshBusy)return;refreshBusy=true;try{const results=await Promise.allSettled([call("status"),call("models"),call("quota")]);if(results[0].status==="fulfilled")renderStatus(dataOf(results[0].value));if(results[1].status==="fulfilled")renderModels(dataOf(results[1].value));if(results[2].status==="fulfilled")renderQuota(dataOf(results[2].value));const failed=results.filter(r=>r.status==="rejected");if(failed.length){if(!silent)message(errorText(failed[0].reason),"error");}else if(!silent){message("概览、服务端模型和配额已更新。","success");}}catch(e){if(!silent)message(errorText(e),"error");}finally{refreshBusy=false;}}
+  function renderModels(d){const n=$("models");if(!n)return;n.textContent="";const list=(d.models||[]).filter(m=>!m.hidden);$("statModels").textContent=String(list.length);if(!list.length){n.innerHTML='<div class="state-line"><span>服务端没有返回可用模型。</span></div>';return;}list.slice(0,8).forEach(m=>{const row=document.createElement("div"),left=document.createElement("div"),title=document.createElement("strong"),small=document.createElement("small"),effort=document.createElement("div");row.className="model-row";title.textContent=m.displayName?(m.id+" — "+m.displayName):m.id;small.textContent="服务端 model/list";left.append(title,small);effort.className="model-effort";effort.textContent=(m.reasoningEfforts||[]).join(", ")||"未声明";row.append(left,effort);n.appendChild(row)});}
+
+  // ---- Usage ----
+  function usageValue(v){return v===null||v===undefined?"—":fmtTokens(v);}
+  function renderUsageSummary(d){const today=d.today||{},last7=d.last7Days||{},last30=d.last30Days||{},w=d.window||{};$("usageToday").textContent=fmtTokens(today.total_tokens,true);$("usage7d").textContent=fmtTokens(last7.total_tokens,true);$("usage30d").textContent=fmtTokens(last30.total_tokens,true);$("usageTotal").textContent=fmtTokens(w.total_tokens,true);$("usageCacheHit").textContent=fmtTokens(w.cached_input_tokens,true);$("usageCacheRate").textContent=cacheRate(w.cache_ratio);$("usageInput").textContent=usageValue(w.input_tokens);$("usageCached").textContent=usageValue(w.cached_input_tokens);$("usageOutput").textContent=usageValue(w.output_tokens);$("usageReasoning").textContent=usageValue(w.reasoning_tokens);$("usageRequests").textContent=fmtTokens(w.requests||0);$("usageMeta").innerHTML="<span>"+((d.trackingStartedAt?"本地统计开始于 "+new Date(Number(d.trackingStartedAt)*1000).toLocaleDateString("zh-CN"):"尚无已完成 turn 的 usage 记录。"))+"</span>";}
+  function renderUsageTurns(d){const n=$("usageTurns");if(!n)return;const heading=n.querySelector(".turn-head");n.textContent="";if(heading)n.appendChild(heading);const turns=Array.isArray(d.turns)?d.turns:[];if(!turns.length){const line=document.createElement("div");line.className="state-line";line.innerHTML="<span>尚无已记录的 Turn。</span>";n.appendChild(line);return;}(turns.slice(0,20)).forEach(turn=>{const row=document.createElement("div");row.className="turn-row";const name=document.createElement("strong"),tt=(v)=>v==null?"—":fmtTokens(v);name.textContent=(turn.model||"unknown")+" · "+(turn.local_date||"—");const input=document.createElement("span");input.textContent=tt(turn.input_tokens);const cache=document.createElement("span");cache.textContent=tt(turn.cached_input_tokens);const rate=document.createElement("span");rate.textContent=cacheRate(turn.input_tokens?(Number(turn.cached_input_tokens||0)/Number(turn.input_tokens)):null);const output=document.createElement("span");output.textContent=tt(turn.output_tokens);const total=document.createElement("span");total.textContent=tt(turn.total_tokens);row.append(name,input,cache,rate,output,total);row.title="已按本次响应的真实 usage 记录；缓存命中率=缓存输入/输入";n.appendChild(row);});}
+  function renderErrorBag(){return null;}
+
+  // ---- Usage heatmap (Codex Profile token-activity style) ----
+  // Sources: account-level server buckets, NOT local model logs.
+  //   summary: {lifetimeTokens, peakDailyTokens, longestRunningTurnSec,
+  //             currentStreakDays, longestStreakDays}
+  //   dailyUsageBuckets: [{startDate:"YYYY-MM-DD", tokens:number}]
+  let hmMode="daily";let hmData={daily:new Map(),summary:null};
+  const HM_WEEK=52, HM_WEEK_COUNT=HM_WEEK*7, HM_WEEKDAY=["Su","Mo","Tu","We","Th","Fr","Sa"];
+  const HM_MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  // Extract + normalize buckets -> Map<YYYY-MM-DD, tokens>. Rules (Codex):
+  //  parse ISO date, drop out-of-window & future dates, negative -> 0,
+  //  duplicate dates accumulate, missing dates fill 0.
+  function hmBuckets(d){
+    if(d&&d.daily instanceof Map)return d.daily;   // already normalized (mode re-render)
+    const arr=Array.isArray(d&&d.dailyUsageBuckets)?d.dailyUsageBuckets:(Array.isArray(d&&d.daily)?d.daily:[]);
+    const map=new Map();const now=new Date();
+    for(const b of arr){
+      const ds=String(b&&(b.startDate||b.date)||"");const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(ds);if(!m)continue;
+      const dt=new Date(+m[1],+m[2]-1,+m[3]);
+      if(dt.getTime()>now.getTime())continue;                 // future
+      let v=Number(b!=null&&b.tokens!=null?b.tokens:(b&&(b.total_tokens!=null?b.total_tokens:b.requests)));
+      if(!Number.isFinite(v)||v<0)v=0;                        // negative -> 0
+      map.set(ds,(map.get(ds)||0)+v);                         // duplicate accumulate
+    }
+    return map;
+  }
+
+  // 52-week grid, Sunday-aligned (start = this week's Sunday minus 51 weeks).
+  function hmWindowStart(){
+    const today=new Date(),sunday=new Date(today);sunday.setDate(today.getDate()-today.getDay());
+    const start=new Date(sunday);start.setDate(sunday.getDate()-(HM_WEEK-1)*7);return start;
+  }
+  function hmDateStr(dt){const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,"0"),dd=String(dt.getDate()).padStart(2,"0");return y+"-"+m+"-"+dd;}
+
+  // Exact Codex char-level threshold mapping (relative to window peak).
+  function hmLevel(value,max){
+    if(!(value>0)||!(max>0))return 0;
+    if(value*4>max*3)return 4;if(value*2>max)return 3;if(value*4>max)return 2;return 1;
+  }
+
+  function hmSummary(s,dailyMap){
+    // Prefer server summary; fall back to computed window values.
+    const winMax=Math.max(0,...dailyMap.values());
+    const lifetime=(s&&Number(s.lifetimeTokens)>0)?Number(s.lifetimeTokens):null;
+    const peak=(s&&Number(s.peakDailyTokens)>0)?Number(s.peakDailyTokens):(winMax||null);
+    const cur=(s&&Number(s.currentStreakDays)>0)?Number(s.currentStreakDays):null;
+    const longest=(s&&Number(s.longestStreakDays)>0)?Number(s.longestStreakDays):null;
+    return {lifetime,peak,cur,longest};
+  }
+
+  function hmCellTitle(dateStr,value,level){
+    if(!(value>0))return dateStr+" · 0 tokens";
+    return dateStr+" · "+fmtTokens(value,true)+" token · 层级 "+level;
+  }
+
+  function renderUsageDaily(d){
+    const grid=$("hmGrid");if(!grid||!d)return;
+    const state=$("hmState"),months=$("hmMonths"),rows=$("hmRows");
+    // Persist normalized data + summary for re-render on mode toggle.
+    const map=hmBuckets(d);hmData.daily=map;hmData.summary=(d&&d.summary)||null;
+    const start=hmWindowStart();
+    const summary=hmSummary(hmData.summary,map);
+
+    // Per-cell value by mode (relative to that mode's own max for quantization).
+    const mode=hmMode;
+    const values=new Array(HM_WEEK_COUNT).fill(0);
+    const sums=new Array(HM_WEEK_COUNT).fill(0);
+    for(let i=0;i<HM_WEEK_COUNT;i++){const dt=new Date(start);dt.setDate(start.getDate()+i);const ds=hmDateStr(dt);const v=map.get(ds)||0;sums[i]=v;}
+    for(let c=0;c<HM_WEEK;c++){let wk=0;for(let r=0;r<7;r++)wk+=sums[c*7+r];for(let r=0;r<7;r++)values[c*7+r]=(mode==="weekly")?wk:0;}
+    if(mode==="daily"){for(let i=0;i<HM_WEEK_COUNT;i++)values[i]=sums[i];}
+    else if(mode==="cumulative"){let run=0;for(let i=0;i<HM_WEEK_COUNT;i++){run+=sums[i];values[i]=run;}}
+    const vmax=Math.max(0,...values);
+
+    // Render grid (columns = weeks, rows = weekday).
+    grid.textContent="";
+    for(let c=0;c<HM_WEEK;c++){
+      const week=document.createElement("div");week.className="hm-week";
+      for(let r=0;r<7;r++){
+        const i=c*7+r,value=values[i],lv=hmLevel(value,vmax);
+        const cell=document.createElement("i");cell.className="hm-cell";
+        cell.classList.add("lv"+lv);
+        const d=hmDateStr(new Date(start.getTime()+i*86400000));
+        cell.title=map.has(d)?hmCellTitle(d,value,lv):(d+" · 无记录");
+        week.appendChild(cell);
+      }
+      grid.appendChild(week);
+    }
+
+    // Weekday labels (Su..Sa).
+    rows.textContent="";
+    HM_WEEKDAY.forEach(wd=>{const s=document.createElement("span");s.textContent=wd;rows.appendChild(s);});
+
+    // Month labels: place at the first week column whose Sunday starts a new month.
+    // Derived from each week column's actual Sunday date, so it stays aligned across month boundaries.
+    months.textContent="";
+    let lastMo=-1;
+    for(let c=0;c<HM_WEEK;c++){
+      const dt=new Date(start);dt.setDate(start.getDate()+c*7);
+      const mo=dt.getMonth();
+      if(mo!==lastMo){lastMo=mo;
+        const span=document.createElement("span");span.className="hm-month";
+        span.textContent=HM_MONTHS[mo];
+        span.style.left=(29+c*16)+"px";
+        months.appendChild(span);
+      }
+    }
+
+    // Summary strip.
+    if(summary.lifetime!=null)$("hmLifetime").textContent=fmtTokens(summary.lifetime,true);
+    else{const win=sums.reduce((a,b)=>a+b,0);$("hmLifetime").textContent=win>0?fmtTokens(win,true):"—";}
+    $("hmPeak").textContent=summary.peak!=null?fmtTokens(summary.peak,true):"—";
+    const sl=$("hmStreak");
+    if(summary.cur!=null){
+      const hat=(summary.longest>summary.cur)?('<span class="hat">最长 '+summary.longest+' 天</span>'):"";
+      sl.innerHTML=summary.cur+' 天'+hat;
+    }else{
+      sl.textContent="—";
+    }
+
+    // State line.
+    const active=mode==="daily"?(sums.filter(v=>v>0).length+" 天有记录"):"按 "+({weekly:"每周",cumulative:"累计"}[mode]||"每日")+" 视角";
+    if(state)state.innerHTML="<span>"+fmtTokens(vmax,true)+" 值峰值 · "+HM_WEEK+" 周窗口 · "+active+"</span>";
+
+    // Default to the right edge so the most recent weeks (and Today) stay visible
+    // whenever the grid overflows its container on narrow widths.
+    const shell=grid.closest(".hm-shell");
+    if(shell){requestAnimationFrame(()=>{shell.scrollLeft=shell.scrollWidth;});}
+  }
+
+  function setHmMode(mode){hmMode=mode;document.querySelectorAll("[data-hm-mode]").forEach(b=>b.classList.toggle("active",b.dataset.hmMode===mode));const cap=$("hmCaption");if(cap)cap.textContent=mode==="daily"?"每日":(mode==="weekly"?"每周":"累计");renderUsageDaily(hmData);}
+
+  async function loadUsage(silent=false){if(usageBusy)return;usageBusy=true;try{const results=await Promise.allSettled([callGet("usage/summary",{days:30}),callGet("usage/daily",{days:365}),callGet("usage/turns",{limit:20})]);try{if(results[0].status==="fulfilled")renderUsageSummary(dataOf(results[0].value));else{$("usageMeta").innerHTML="<span>"+errorText(results[0].reason)+"</span>";}if(results[1].status==="fulfilled")renderUsageDaily(dataOf(results[1].value));else{const s=$("hmState");if(s)s.innerHTML="<span>"+errorText(results[1].reason)+"</span>";}if(results[2].status==="fulfilled")renderUsageTurns(dataOf(results[2].value));if(!silent&&results.some(r=>r.status==="rejected"))message(errorText(results.find(r=>r.status==="rejected").reason),"error");}catch(e){if(!silent)message(errorText(e),"error");}}finally{usageBusy=false;}}
+
+  // ---- Login flow ----
+  function stopPoll(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
+  function poll(){stopPoll();pollTimer=setInterval(async()=>{try{const connected=renderStatus(dataOf(await call("status")));if(connected){stopPoll();hideLogin();message("ChatGPT 登录已完成。","success");await load(true);}}catch{}},2500);}
+  function hideLogin(){const f=$("loginFlow");if(f)f.hidden=true;}
+  function openLogin(){const f=$("loginFlow");if(f)f.hidden=false;}
+  function selectedLoginMode(){return $("setupLoginMode")?.value||detectedLoginMode||"browser";}
+  function selectedCodexPath(){return $("setupCodexPath")?.value.trim()||"codex";}
+  function renderLoginResult(d){const device=d.type==="chatgptDeviceCode",authBox=$("browserLoginBox"),cb=$("callbackForm"),db=$("deviceCodeBox"),url=$("authUrl"),hint=$("loginHint");openLogin();authBox.hidden=device;cb.hidden=device;db.hidden=!device;url.hidden=device;if(device){$("deviceVerification").href=d.verificationUrl||"#";$("deviceCode").textContent="验证码："+(d.userCode||"未返回");hint.textContent="请打开验证地址并输入一次性验证码，完成后返回此页面等待登录状态更新。";message("Device Code 登录已启动，请完成验证。");}else{url.hidden=false;url.value=d.authUrl||"";$("openAuth").href=d.authUrl||"#";hint.textContent="浏览器授权完成后，如果浏览器跳转到 localhost 地址但服务器未自动完成登录，请将地址栏中的完整回调链接（包括 code 和 state）粘贴到下面。";message("OAuth 已启动，请完成 ChatGPT 授权。");}}
+  async function startLogin(mode){const selected=mode==="device_code"?"device_code":"browser";await call("config",{config:{login_mode:selected,codex_path:selectedCodexPath()}});renderLoginResult(dataOf(await call("login/start",{mode:selected})));poll();}
+  async function login(){const b=$("login");b.disabled=true;try{await startLogin(selectedLoginMode());}catch(e){message(errorText(e),"error");}finally{b.disabled=false;}}
+  async function setupSave(){const b=$("setupSave");b.disabled=true;try{const d=dataOf(await call("config",{config:{codex_path:selectedCodexPath(),login_mode:selectedLoginMode()}}));const det=$("setupDetection");if(det){det.className="state-line";det.innerHTML="<span>已保存，正在使用当前环境重新检测。</span>";}await load(true);message("Codex 设置已保存。请确认检测结果后开始登录。","success");}catch(e){message(errorText(e),"error");}finally{b.disabled=false;}}
+  async function setupLogin(){const b=$("setupLogin");b.disabled=true;try{await startLogin(selectedLoginMode());}catch(e){message(errorText(e),"error");}finally{b.disabled=false;}}
+  async function submit(){const b=$("submitCallback"),val=$("callbackUrl").value.trim();if(!val){message("请粘贴完整的 localhost 回调地址（必须包含 ?code=...&state=...）。","error");return;}try{const u=new URL(val),host=u.hostname.toLowerCase();if(u.protocol!=="http:"||!["localhost","127.0.0.1","::1","[::1]"].includes(host)||u.pathname!=="/auth/callback"||!u.searchParams.get("code")||!u.searchParams.get("state"))throw new Error("请粘贴完整的 http://localhost/.../auth/callback?code=...&state=... 地址，不能只粘贴路径或部分参数。");}catch(e){message(errorText(e),"error");return;}b.disabled=true;$("callbackUrl").value="";try{dataOf(await call("login/callback",{callbackUrl:val}));poll();message("完整回调已交给服务器上的 Codex，正在确认登录状态…");}catch(e){message(errorText(e),"error");}finally{b.disabled=false;}}
+  async function logout(){const b=$("logout");b.disabled=true;try{dataOf(await call("logout",{}));stopPoll();hideLogin();await load(true);message("已退出登录。","success");}catch(e){message(errorText(e),"error");}finally{b.disabled=false;}}
+
+  // ---- Theme ----
+  function applyTheme(theme){const value=theme==="dark"?"dark":"light";document.documentElement.dataset.theme=value;$("themeToggle").textContent=value==="dark"?"亮色模式":"暗色模式";try{localStorage.setItem("astrbot_codex_theme",value);}catch{}}
+  function initTheme(){let saved="";try{saved=localStorage.getItem("astrbot_codex_theme")||"";}catch{}applyTheme(saved||"dark");}
+
+  // ---- Wiring ----
+  const refreshBtn=$("refresh");
+  $("login").onclick=login;
+  $("setupSave").onclick=setupSave;
+  $("setupLogin").onclick=setupLogin;
+  refreshBtn.onclick=()=>load();
+  $("usageRefresh").onclick=()=>loadUsage();
+  document.querySelectorAll("[data-hm-mode]").forEach(b=>b.addEventListener("click",()=>setHmMode(b.dataset.hmMode)));
+  $("submitCallback").onclick=submit;
+  $("closeLogin").onclick=()=>{hideLogin();$("callbackUrl").value="";$("deviceCodeBox").hidden=true;$("browserLoginBox").hidden=false;$("callbackForm").hidden=false;}
+  $("logout").onclick=logout;
+  $("themeToggle").onclick=()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
+
+  // Guard refresh button against duplicate requests
+  const _load=load;refreshBtn.addEventListener("click",()=>{refreshBtn.disabled=true;refreshBtn.textContent="刷新中…";_load().finally(()=>{refreshBtn.disabled=false;refreshBtn.textContent="刷新概览";});});
+  const _usage=loadUsage;$("usageRefresh").addEventListener("click",()=>{$("usageRefresh").disabled=true;$("usageRefresh").textContent="刷新中…";_usage().finally(()=>{$("usageRefresh").disabled=false;$("usageRefresh").textContent="刷新";});});
+
+  initTheme();
+  load();
+  loadUsage(true);
+  setInterval(()=>load(true),60000);
+  setInterval(()=>loadUsage(true),60000);
 })();
 </script>
 </body>

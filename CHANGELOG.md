@@ -18,6 +18,7 @@ tags.
   格式并安全内联为 data URI。
 - HTTP 协议错误会保留服务端提供的有限错误原因，同时对内联图片内容进行脱敏。
 - 按 OpenDesign 最新前端稿原样同步概览与设置页面，不在移植阶段增加额外界面元素。
+- 按 `Website-Clone.zip` 提供的新版账户概览与设置页面更新前端，仅补充插件桥接脚本和实际 WebUI 路由。
 - 修复非流式 Agent Runner 丢失 Responses function call 的问题；搜索、表情包和星图
   工具现在可以正常进入 AstrBot 的工具循环，不再被误判为空回复。
 - 对历史上下文中的重复图片和音频做去重，避免重复发送同一张表情包或天文图片。
@@ -31,6 +32,8 @@ tags.
   redacting inline image data.
 - Synced the latest OpenDesign overview and settings pages as-is without adding
   extra UI elements during migration.
+- Updated the account overview and settings pages from `Website-Clone.zip`; only
+  the plugin bridge script and deployed WebUI routes were added for integration.
 - Fixed non-streaming Agent Runner calls dropping Responses function calls; search,
   sticker, and star-field tools now reach AstrBot's tool loop instead of becoming
   empty assistant messages.
