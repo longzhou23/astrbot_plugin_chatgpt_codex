@@ -360,7 +360,8 @@ button{font:inherit;cursor:pointer}
   async function save(event){event.preventDefault();if(noBridge){message("预览模式：AstrBot 插件桥接未加载，无法保存。","error");return;}const b=$("saveSettings"),values=collectValues();b.disabled=true;try{const d=dataOf(await call("config",{config:values}));applySettings(d.config||values);$("settingsHint").textContent=d.restartRequired?"设置已保存；部分进程设置将在重启 AstrBot 后生效。":"设置已保存并立即生效。";message($("settingsHint").textContent,"success")}catch(e){$("settingsHint").textContent=errorText(e);message(errorText(e),"error")}finally{b.disabled=false}}
   function applyTheme(theme){const value=theme==="dark"?"dark":"light";document.documentElement.dataset.theme=value;$("themeToggle").textContent=value==="dark"?"亮色模式":"暗色模式";try{localStorage.setItem("astrbot_codex_theme",value)}catch{}}
   function initTheme(){let saved="";try{saved=localStorage.getItem("astrbot_codex_theme")||""}catch{}applyTheme(saved||"dark")}
-  function wireTopNavigation(){document.querySelectorAll("[data-od-id]").forEach(el=>{const href=el.getAttribute("href");if(href&&href.endsWith(".html"))el.addEventListener("click",()=>{window.location.href=href});})}
+  function navigateTop(href){try{(window.top||window).location.assign(href);}catch{window.location.assign(href);}}
+  function wireTopNavigation(){document.querySelectorAll('a[data-od-id][href^="/#/plugin-page/"]').forEach(link=>link.addEventListener("click",event=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();navigateTop(link.href);}));}
   $("settingsForm").addEventListener("submit",save);
   document.querySelectorAll("[data-setting]").forEach(node=>{node.addEventListener("input",()=>{dirty=true});node.addEventListener("change",()=>{dirty=true})});
   $("themeToggle").onclick=()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");

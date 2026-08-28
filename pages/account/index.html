@@ -624,6 +624,8 @@ button{font:inherit;cursor:pointer}
   // ---- Theme ----
   function applyTheme(theme){const value=theme==="dark"?"dark":"light";document.documentElement.dataset.theme=value;$("themeToggle").textContent=value==="dark"?"亮色模式":"暗色模式";try{localStorage.setItem("astrbot_codex_theme",value);}catch{}}
   function initTheme(){let saved="";try{saved=localStorage.getItem("astrbot_codex_theme")||"";}catch{}applyTheme(saved||"dark");}
+  function navigateTop(href){try{(window.top||window).location.assign(href);}catch{window.location.assign(href);}}
+  function wireTopNavigation(){document.querySelectorAll('a[data-od-id][href^="/#/plugin-page/"]').forEach(link=>link.addEventListener("click",event=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();navigateTop(link.href);}));}
 
   // ---- Wiring ----
   const refreshBtn=$("refresh");
@@ -643,6 +645,7 @@ button{font:inherit;cursor:pointer}
   const _usage=loadUsage;$("usageRefresh").addEventListener("click",()=>{$("usageRefresh").disabled=true;$("usageRefresh").textContent="刷新中…";_usage().finally(()=>{$("usageRefresh").disabled=false;$("usageRefresh").textContent="刷新";});});
 
   initTheme();
+  wireTopNavigation();
   load();
   loadUsage(true);
   setInterval(()=>load(true),60000);
