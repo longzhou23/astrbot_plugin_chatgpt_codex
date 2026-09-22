@@ -4,12 +4,18 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from ..model_catalog import CodexModel
 from ..transport.client import CodexTransportClient
 from ..transport.models import parse_transport_models
 from ..transport.responses import build_input_items, parse_sse_data, response_request
-from ..transport.types import TransportResponse, TransportToolCall, TransportUsage
+from ..transport.types import (
+    TransportProtocolError,
+    TransportResponse,
+    TransportToolCall,
+    TransportUsage,
+)
 
 
 class TransportTests(unittest.TestCase):
@@ -51,6 +57,26 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(payload["store"], False)
         self.assertEqual(payload["stream"], True)
 
+    def test_request_preserves_tool_choice_and_supported_options(self):
+        payload = response_request(
+            model="gpt-test",
+            instructions="use a tool",
+            input_items=build_input_items([], "hello"),
+            tools=[{"type": "function", "name": "search", "parameters": {}}],
+            tool_choice="required",
+            request_options={
+                "temperature": 0.1,
+                "max_output_tokens": 128,
+                "parallel_tool_calls": False,
+                "text": {"format": {"type": "json_object"}},
+                "ignored": "must-not-leak",
+            },
+        )
+        self.assertEqual(payload["tool_choice"], "required")
+        self.assertEqual(payload["max_output_tokens"], 128)
+        self.assertFalse(payload["parallel_tool_calls"])
+        self.assertNotIn("ignored", payload)
+
     def test_input_mapping_keeps_history_and_latest_message(self):
         items = build_input_items(
             [
@@ -84,7 +110,9 @@ class TransportTests(unittest.TestCase):
             "inspect",
             extra_user_content_parts=[
                 self.FakeContentPart({"type": "text", "text": "memory"}),
-                self.FakeContentPart({"type": "image_url", "image_url": {"url": "data:image/png;base64,x"}}),
+                self.FakeContentPart(
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,x"}}
+                ),
             ],
             image_urls=["https://example.invalid/current.png"],
             audio_urls=["https://example.invalid/current.wav"],
@@ -101,7 +129,11 @@ class TransportTests(unittest.TestCase):
             latest["content"],
         )
         self.assertIn(
-            {"type": "input_image", "detail": "auto", "image_url": "https://example.invalid/current.png"},
+            {
+                "type": "input_image",
+                "detail": "auto",
+                "image_url": "https://example.invalid/current.png",
+            },
             latest["content"],
         )
         self.assertIn(
@@ -159,9 +191,7 @@ class TransportTests(unittest.TestCase):
             [],
             "请看看这些附件",
             extra_user_content_parts=[
-                self.FakeContentPart(
-                    {"type": "reply", "message_str": "上一条被引用的消息"}
-                ),
+                self.FakeContentPart({"type": "reply", "message_str": "上一条被引用的消息"}),
                 self.FakeContentPart({"type": "file", "name": "星图说明.pdf"}),
                 self.FakeContentPart({"type": "video", "name": "观测现场.mp4"}),
                 self.FakeContentPart(
@@ -289,6 +319,48 @@ class TransportTests(unittest.TestCase):
         )
         self.assertEqual(result.text, "hello")
         self.assertEqual(result.usage, TransportUsage(10, 3, 4, 1, 14, None))
+
+    def test_refusal_is_public_and_waits_for_authoritative_completion(self):
+        result = TransportResponse()
+        self.assertFalse(
+            parse_sse_data(
+                json.dumps({"type": "response.refusal.done", "text": "无法协助"}),
+                result,
+            )
+        )
+        self.assertEqual(result.text, "无法协助")
+        self.assertEqual(result.terminal_type, "refusal")
+        self.assertTrue(
+            parse_sse_data(
+                json.dumps(
+                    {
+                        "type": "response.completed",
+                        "response": {"usage": {"input_tokens": 2, "output_tokens": 2}},
+                    }
+                ),
+                result,
+            )
+        )
+        self.assertEqual(result.terminal_type, "completed")
+        self.assertEqual(result.usage.input_tokens, 2)
+
+    def test_failed_incomplete_and_error_events_are_diagnostic_terminals(self):
+        cases = [
+            ({"type": "response.failed", "response": {}}, "响应失败"),
+            (
+                {
+                    "type": "response.incomplete",
+                    "response": {"incomplete_details": {"reason": "max_output_tokens"}},
+                },
+                "max_output_tokens",
+            ),
+            ({"type": "error", "code": "stream_error"}, "stream_error"),
+        ]
+        for event, expected in cases:
+            with self.subTest(kind=event["type"]):
+                result = TransportResponse()
+                self.assertTrue(parse_sse_data(json.dumps(event), result))
+                self.assertIn(expected, result.terminal_error)
 
     def test_function_call_arguments_are_assembled_across_sse_events(self):
         result = TransportResponse()
@@ -556,6 +628,45 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(client.proxy_url, "http://127.0.0.1:7890")
             with self.assertRaises(ValueError):
                 client.set_proxy("http://user:password@127.0.0.1:7890")
+
+
+class TransportClientTerminalTests(unittest.IsolatedAsyncioTestCase):
+    class FakeResponse:
+        def __init__(self, event):
+            payload = json.dumps(event).encode("utf-8")
+            self.lines = iter([b"data: " + payload + b"\n", b"\n", b""])
+            self.headers = {}
+            self.closed = False
+
+        def readline(self):
+            return next(self.lines)
+
+        def close(self):
+            self.closed = True
+
+    async def test_failed_sse_terminal_raises_protocol_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = CodexTransportClient(Path(directory))
+            response = self.FakeResponse(
+                {"type": "response.failed", "response": {"id": "resp-failed"}}
+            )
+
+            async def snapshot(*args, **kwargs):
+                del args, kwargs
+                return SimpleNamespace(access_token="secret", account_id="account")
+
+            client.auth.snapshot = snapshot
+            client._open = lambda request, timeout: response
+            with self.assertRaisesRegex(TransportProtocolError, "响应失败"):
+                _ = [
+                    event
+                    async for event in client.stream_chat(
+                        model="gpt-test",
+                        instructions="safe",
+                        input_items=build_input_items([], "hello"),
+                    )
+                ]
+            self.assertTrue(response.closed)
 
 
 if __name__ == "__main__":

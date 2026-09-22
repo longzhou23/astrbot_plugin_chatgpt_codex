@@ -1,15 +1,19 @@
 import unittest
 
 from ..agent_provider import (
+    _astrbot_token_usage,
     _collect_provider_response,
     _conversation_key,
     _ensure_supported_modalities,
     _has_non_text_content,
     _is_title_generation_request,
     _normalize_request_inputs,
+    _normalize_request_options,
     _stream_frames,
     _stream_provider_responses,
+    _validated_tool_choice,
 )
+from ..codex_errors import CodexCapabilityError
 from ..transport.types import TransportError
 
 
@@ -19,6 +23,44 @@ async def event_stream(events):
 
 
 class AgentProviderContractTests(unittest.IsolatedAsyncioTestCase):
+    def test_server_usage_maps_to_astrbot_without_double_counting_reasoning(self):
+        usage = _astrbot_token_usage(
+            {
+                "input_tokens": 100,
+                "cached_input_tokens": 70,
+                "output_tokens": 20,
+                "reasoning_tokens": 5,
+            }
+        )
+        self.assertIsNotNone(usage)
+        self.assertEqual((usage.input_other, usage.input_cached, usage.output), (30, 70, 20))
+        self.assertIsNone(_astrbot_token_usage(None))
+
+    def test_required_tool_choice_needs_tools(self):
+        with self.assertRaisesRegex(CodexCapabilityError, "必须提供"):
+            _validated_tool_choice("required", [])
+        self.assertEqual(
+            _validated_tool_choice("required", [{"type": "function", "name": "search"}]),
+            "required",
+        )
+
+    def test_request_option_whitelist_maps_responses_fields(self):
+        options = _normalize_request_options(
+            {
+                "temperature": 0.2,
+                "top_p": 0.8,
+                "max_tokens": 128,
+                "parallel_tool_calls": False,
+                "response_format": {"type": "json_object"},
+            }
+        )
+        self.assertEqual(options["max_output_tokens"], 128)
+        self.assertEqual(options["text"], {"format": {"type": "json_object"}})
+        with self.assertRaisesRegex(CodexCapabilityError, "不支持的模型调用参数"):
+            _normalize_request_options({"seed": 1})
+        with self.assertRaisesRegex(CodexCapabilityError, "不支持 stop"):
+            _normalize_request_options({"stop": ["END"]})
+
     def test_old_provider_modalities_are_migrated_with_tool_use(self):
         provider_config = {"modalities": ["text", "image"]}
 
@@ -150,6 +192,53 @@ class AgentProviderContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.tools_call_name, ["web_search"])
         self.assertEqual(response.tools_call_args, [{"query": "latest"}])
         self.assertEqual(response.tools_call_ids, ["call-search-1"])
+
+    async def test_text_and_tool_terminals_carry_standard_usage(self):
+        terminal = await _collect_provider_response(
+            event_stream(
+                [
+                    {
+                        "kind": "final",
+                        "text": "ok",
+                        "usage": {
+                            "input_tokens": 50,
+                            "cached_input_tokens": 20,
+                            "output_tokens": 4,
+                            "reasoning_tokens": 2,
+                        },
+                    }
+                ]
+            )
+        )
+        self.assertEqual(
+            (terminal.usage.input_other, terminal.usage.input_cached, terminal.usage.output),
+            (30, 20, 4),
+        )
+
+        tool_terminal = await _collect_provider_response(
+            event_stream(
+                [
+                    {
+                        "kind": "tool_call",
+                        "tool_calls": [{"call_id": "c1", "name": "search", "arguments": "{}"}],
+                        "usage": {
+                            "input_tokens": 10,
+                            "cached_input_tokens": 8,
+                            "output_tokens": 3,
+                        },
+                    }
+                ]
+            )
+        )
+        self.assertEqual(tool_terminal.role, "tool")
+        self.assertEqual(
+            (
+                tool_terminal.usage.input_other,
+                tool_terminal.usage.input_cached,
+                tool_terminal.usage.output,
+            ),
+            (2, 8, 3),
+        )
 
     async def test_streaming_adapter_rejects_empty_terminal_response(self):
         with self.assertRaises(TransportError):

@@ -9,6 +9,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from .codex_errors import CodexCapabilityError
 from .codex_service import CodexService
 from .transport.responses import openai_tools_to_responses
 from .transport.types import TransportError
@@ -18,11 +19,18 @@ try:
     from astrbot.core.agent.message import ContentPart, Message
     from astrbot.core.agent.tool import ToolSet
     from astrbot.core.provider.entities import LLMResponse
+    from astrbot.core.provider.entities import TokenUsage as AstrBotTokenUsage
     from astrbot.core.provider.register import register_provider_adapter
 
     _ASTRBOT_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _ASTRBOT_AVAILABLE = False
+
+    class AstrBotTokenUsage:  # type: ignore[no-redef]
+        def __init__(self, input_other: int = 0, input_cached: int = 0, output: int = 0) -> None:
+            self.input_other = input_other
+            self.input_cached = input_cached
+            self.output = output
 
     class LLMResponse:  # type: ignore[no-redef]
         """Small host-free contract double used by adapter unit tests."""
@@ -36,6 +44,7 @@ except ImportError:  # pragma: no cover
             tools_call_ids: list[str] | None = None,
             reasoning_signature: str | None = None,
             is_chunk: bool = False,
+            usage: AstrBotTokenUsage | None = None,
         ) -> None:
             self.role = role
             self.completion_text = completion_text or ""
@@ -44,16 +53,124 @@ except ImportError:  # pragma: no cover
             self.tools_call_ids = tools_call_ids or []
             self.reasoning_signature = reasoning_signature
             self.is_chunk = is_chunk
+            self.usage = usage
 
 
 _SERVICE: CodexService | None = None
 
 _SUPPORTED_MODALITIES = ("text", "image", "audio", "tool_use")
+_SUPPORTED_REQUEST_OPTIONS = {
+    "temperature",
+    "top_p",
+    "max_tokens",
+    "max_output_tokens",
+    "response_format",
+    "parallel_tool_calls",
+    "stop",
+}
 
 
 def bind_service(service: CodexService) -> None:
     global _SERVICE
     _SERVICE = service
+
+
+def _astrbot_token_usage(value: Any) -> AstrBotTokenUsage | None:
+    """Map one server turn without counting reasoning as output a second time."""
+
+    if not isinstance(value, dict):
+        return None
+
+    def token(name: str) -> int | None:
+        item = value.get(name)
+        return item if isinstance(item, int) and not isinstance(item, bool) and item >= 0 else None
+
+    input_tokens = token("input_tokens")
+    cached_tokens = token("cached_input_tokens")
+    output_tokens = token("output_tokens")
+    if input_tokens is None and cached_tokens is None and output_tokens is None:
+        return None
+    cached = (
+        min(cached_tokens or 0, input_tokens) if input_tokens is not None else (cached_tokens or 0)
+    )
+    return AstrBotTokenUsage(
+        input_other=max(0, (input_tokens or 0) - cached),
+        input_cached=cached,
+        output=output_tokens or 0,
+    )
+
+
+def _normalize_response_format(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise CodexCapabilityError("response_format 必须是 OpenAI 兼容的对象")
+    kind = value.get("type")
+    if kind in {"text", "json_object"}:
+        return {"type": kind}
+    if kind == "json_schema":
+        schema = value.get("json_schema")
+        if not isinstance(schema, dict):
+            raise CodexCapabilityError("response_format.json_schema 必须是对象")
+        normalized = {"type": "json_schema"}
+        for key in ("name", "description", "schema", "strict"):
+            if key in schema:
+                normalized[key] = schema[key]
+        if not isinstance(normalized.get("name"), str) or not isinstance(
+            normalized.get("schema"), dict
+        ):
+            raise CodexCapabilityError("json_schema response_format 需要 name 和 schema")
+        return normalized
+    raise CodexCapabilityError(f"不支持的 response_format 类型：{kind or 'missing'}")
+
+
+def _normalize_request_options(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Validate the small Responses parameter subset this provider preserves."""
+
+    unknown = sorted(set(kwargs) - _SUPPORTED_REQUEST_OPTIONS)
+    if unknown:
+        raise CodexCapabilityError("不支持的模型调用参数：" + ", ".join(unknown))
+    if kwargs.get("stop") not in (None, [], ""):
+        raise CodexCapabilityError("Codex Responses Transport 当前不支持 stop 参数")
+
+    options: dict[str, Any] = {}
+    for key, lower, upper in (("temperature", 0.0, 2.0), ("top_p", 0.0, 1.0)):
+        value = kwargs.get(key)
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise CodexCapabilityError(f"{key} 必须是数字")
+        if not lower <= float(value) <= upper:
+            raise CodexCapabilityError(f"{key} 必须位于 {lower:g} 到 {upper:g} 之间")
+        options[key] = value
+
+    max_tokens = kwargs.get("max_output_tokens")
+    alias_tokens = kwargs.get("max_tokens")
+    if max_tokens is not None and alias_tokens is not None and max_tokens != alias_tokens:
+        raise CodexCapabilityError("max_tokens 与 max_output_tokens 不能设置为不同值")
+    max_tokens = max_tokens if max_tokens is not None else alias_tokens
+    if max_tokens is not None:
+        if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1:
+            raise CodexCapabilityError("max_output_tokens 必须是正整数")
+        options["max_output_tokens"] = max_tokens
+
+    parallel = kwargs.get("parallel_tool_calls")
+    if parallel is not None:
+        if not isinstance(parallel, bool):
+            raise CodexCapabilityError("parallel_tool_calls 必须是布尔值")
+        options["parallel_tool_calls"] = parallel
+
+    response_format = kwargs.get("response_format")
+    if response_format is not None:
+        options["text"] = {"format": _normalize_response_format(response_format)}
+    return options
+
+
+def _validated_tool_choice(value: Any, tools: list[dict[str, Any]]) -> str:
+    choice = value or "auto"
+    if choice not in {"auto", "required"}:
+        raise CodexCapabilityError("tool_choice 只能是 auto 或 required")
+    if choice == "required" and not tools:
+        raise CodexCapabilityError("tool_choice=required 时必须提供至少一个 AstrBot 工具")
+    return str(choice)
 
 
 def _ensure_supported_modalities(provider_config: dict[str, Any]) -> list[str]:
@@ -205,6 +322,7 @@ async def _stream_provider_responses(
     final_text = ""
     emitted_text = False
     reasoning_signature: str | None = None
+    terminal_usage: AstrBotTokenUsage | None = None
     saw_tool_call = False
     async for event in events:
         kind = event.get("kind")
@@ -218,6 +336,7 @@ async def _stream_provider_responses(
                 emitted_text = True
                 yield LLMResponse(role="assistant", completion_text=text, is_chunk=True)
         elif kind == "tool_call":
+            terminal_usage = _astrbot_token_usage(event.get("usage"))
             calls = event.get("tool_calls") if isinstance(event.get("tool_calls"), list) else []
             args: list[dict[str, Any]] = []
             names: list[str] = []
@@ -242,9 +361,11 @@ async def _stream_provider_responses(
                     tools_call_ids=ids,
                     reasoning_signature=reasoning_signature,
                     is_chunk=False,
+                    usage=terminal_usage,
                 )
         elif kind == "final":
             final_text = str(event.get("text", ""))
+            terminal_usage = _astrbot_token_usage(event.get("usage"))
             if final_text and not emitted_text:
                 yield LLMResponse(role="assistant", completion_text=final_text, is_chunk=True)
 
@@ -265,6 +386,7 @@ async def _stream_provider_responses(
         completion_text=completed_text,
         reasoning_signature=reasoning_signature,
         is_chunk=False,
+        usage=terminal_usage,
     )
 
 
@@ -355,7 +477,14 @@ if _ASTRBOT_AVAILABLE:
                     raise RuntimeError("Codex returned no available models")
 
         async def get_models(self) -> list[str]:
-            return [model.id for model in await self._service().list_models() if not model.hidden]
+            # AstrBot calls this method when the user requests a model-list
+            # refresh. Bypass the service TTL so newly advertised models are
+            # visible immediately instead of waiting for the cache to expire.
+            return [
+                model.id
+                for model in await self._service().list_models(refresh=True)
+                if not model.hidden
+            ]
 
         async def text_chat(
             self,
@@ -369,9 +498,14 @@ if _ASTRBOT_AVAILABLE:
             tool_calls_result: Any = None,
             model: str | None = None,
             extra_user_content_parts: list[ContentPart] | None = None,
+            tool_choice: str = "auto",
+            request_max_retries: int | None = None,
             **kwargs: Any,
         ) -> LLMResponse:
-            del kwargs
+            abort_signal = kwargs.pop("abort_signal", None)
+            request_options = _normalize_request_options(kwargs)
+            response_tools = openai_tools_to_responses(func_tool)
+            selected_tool_choice = _validated_tool_choice(tool_choice, response_tools)
             if session_id is None and _is_title_generation_request(prompt, contexts, system_prompt):
                 return LLMResponse(role="assistant", completion_text="<None>")
             session_key = _conversation_key(session_id)
@@ -388,7 +522,11 @@ if _ASTRBOT_AVAILABLE:
                     audio_urls=audio_urls,
                     tool_calls_result=tool_calls_result,
                     model=model or self.model_name,
-                    tools=openai_tools_to_responses(func_tool),
+                    tools=response_tools,
+                    tool_choice=selected_tool_choice,
+                    request_max_retries=request_max_retries,
+                    abort_signal=abort_signal,
+                    request_options=request_options,
                 )
                 return await _collect_provider_response(events)
             finally:
@@ -408,9 +546,14 @@ if _ASTRBOT_AVAILABLE:
             tool_calls_result: Any = None,
             model: str | None = None,
             extra_user_content_parts: list[ContentPart] | None = None,
+            tool_choice: str = "auto",
+            request_max_retries: int | None = None,
             **kwargs: Any,
         ) -> AsyncGenerator[LLMResponse, None]:
-            del kwargs
+            abort_signal = kwargs.pop("abort_signal", None)
+            request_options = _normalize_request_options(kwargs)
+            response_tools = openai_tools_to_responses(func_tool)
+            selected_tool_choice = _validated_tool_choice(tool_choice, response_tools)
             if session_id is None and _is_title_generation_request(prompt, contexts, system_prompt):
                 yield LLMResponse(role="assistant", completion_text="<None>", is_chunk=False)
                 return
@@ -428,7 +571,11 @@ if _ASTRBOT_AVAILABLE:
                     audio_urls=audio_urls,
                     tool_calls_result=tool_calls_result,
                     model=model or self.model_name,
-                    tools=openai_tools_to_responses(func_tool),
+                    tools=response_tools,
+                    tool_choice=selected_tool_choice,
+                    request_max_retries=request_max_retries,
+                    abort_signal=abort_signal,
+                    request_options=request_options,
                 )
                 async for response in _stream_provider_responses(events):
                     # AstrBot's Agent Runner requires the final non-chunk response to

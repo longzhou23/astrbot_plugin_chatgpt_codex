@@ -1,10 +1,21 @@
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
 
-from ..codex_errors import CodexRPCError
+from ..codex_errors import (
+    CodexCapabilityError,
+    CodexQuotaError,
+    CodexRPCError,
+    CodexTransportError,
+)
 from ..codex_service import CodexService
-from ..transport.types import TransportError
+from ..transport.types import (
+    TransportError,
+    TransportNetworkError,
+    TransportQuotaError,
+    TransportServerError,
+)
 
 
 class FakeRpc:
@@ -69,7 +80,167 @@ class BlankTransport:
         }
 
 
+class FlakyTransport:
+    def __init__(self, error, failures=1):
+        self.error = error
+        self.failures = failures
+        self.calls = 0
+
+    async def stream_chat(self, **kwargs):
+        del kwargs
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise self.error
+        yield {
+            "kind": "final",
+            "text": "recovered",
+            "response_id": "resp-recovered",
+            "usage": None,
+            "tool_calls": [],
+        }
+
+
+class HangingTransport:
+    def __init__(self):
+        self.started = asyncio.Event()
+
+    async def stream_chat(self, **kwargs):
+        del kwargs
+        self.started.set()
+        await asyncio.Event().wait()
+        yield {"kind": "final", "text": "unreachable", "tool_calls": []}
+
+
 class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_transport_retries_only_retryable_failures_with_caller_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = CodexService(
+                Path(directory), {"backend_mode": "transport", "turn_timeout": 30}
+            )
+            network = FlakyTransport(TransportNetworkError("temporary"))
+            service.transport = network
+            try:
+                events = [
+                    event
+                    async for event in service.stream_turn(
+                        session_key="retry-network",
+                        prompt="hello",
+                        model="gpt-test",
+                        request_max_retries=2,
+                    )
+                ]
+                self.assertEqual(network.calls, 2)
+                self.assertEqual(events[-1]["text"], "recovered")
+
+                quota = FlakyTransport(TransportQuotaError("quota"), failures=5)
+                service.transport = quota
+                with self.assertRaises(TransportQuotaError):
+                    async for _ in service.stream_turn(
+                        session_key="retry-quota",
+                        prompt="hello",
+                        model="gpt-test",
+                        request_max_retries=5,
+                    ):
+                        pass
+                self.assertEqual(quota.calls, 1)
+
+                server = FlakyTransport(TransportServerError("upstream 503"))
+                service.transport = server
+                events = [
+                    event
+                    async for event in service.stream_turn(
+                        session_key="retry-server",
+                        prompt="hello",
+                        model="gpt-test",
+                        request_max_retries=2,
+                    )
+                ]
+                self.assertEqual(server.calls, 2)
+                self.assertEqual(events[-1]["text"], "recovered")
+            finally:
+                await service.close()
+
+    async def test_transport_abort_signal_cancels_active_stream(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = CodexService(
+                Path(directory), {"backend_mode": "transport", "turn_timeout": 30}
+            )
+            hanging = HangingTransport()
+            service.transport = hanging
+            abort_signal = asyncio.Event()
+
+            async def collect():
+                return [
+                    event
+                    async for event in service.stream_turn(
+                        session_key="abort-active",
+                        prompt="hello",
+                        model="gpt-test",
+                        abort_signal=abort_signal,
+                    )
+                ]
+
+            task = asyncio.create_task(collect())
+            await asyncio.wait_for(hanging.started.wait(), 1)
+            abort_signal.set()
+            with self.assertRaises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 1)
+            await service.close()
+
+    async def test_auto_never_falls_back_when_astrbot_tools_are_present(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = CodexService(Path(directory), {"backend_mode": "auto", "turn_timeout": 30})
+            service.transport = FlakyTransport(TransportNetworkError("offline"), failures=1)
+            try:
+                with self.assertRaisesRegex(CodexCapabilityError, "阻止自动回退"):
+                    async for _ in service.stream_turn(
+                        session_key="auto-tool",
+                        prompt="search",
+                        model="gpt-test",
+                        tools=[{"type": "function", "name": "search"}],
+                    ):
+                        pass
+            finally:
+                await service.close()
+
+    async def test_auto_plain_text_can_still_fall_back_to_app_server(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = CodexService(Path(directory), {"backend_mode": "auto", "turn_timeout": 30})
+            service.transport = FlakyTransport(TransportNetworkError("offline"), failures=1)
+
+            async def app_server_fallback(**kwargs):
+                del kwargs
+                yield {"kind": "final", "text": "fallback"}
+
+            service._stream_app_server_turn = app_server_fallback
+            try:
+                events = [
+                    event
+                    async for event in service.stream_turn(
+                        session_key="auto-text", prompt="hello", model="gpt-test"
+                    )
+                ]
+                self.assertEqual(events, [{"kind": "final", "text": "fallback"}])
+            finally:
+                await service.close()
+
+    async def test_app_server_rejects_astrbot_tools_explicitly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = CodexService(
+                Path(directory), {"backend_mode": "app_server", "turn_timeout": 30}
+            )
+            try:
+                with self.assertRaisesRegex(CodexCapabilityError, "暂不支持 AstrBot 工具"):
+                    async for _ in service.stream_turn(
+                        session_key="app-tools",
+                        prompt="search",
+                        model="gpt-test",
+                        tools=[{"type": "function", "name": "search"}],
+                    ):
+                        pass
+            finally:
+                await service.close()
+
     async def test_transport_rejects_whitespace_only_assistant_output(self):
         with tempfile.TemporaryDirectory() as directory:
             service = CodexService(
@@ -170,6 +341,124 @@ class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(events, [{"kind": "final", "text": "Hi! How can I help?"}])
         self.assertEqual(rpc.interrupts, [])
+
+    async def test_app_server_retry_limit_includes_first_attempt(self):
+        current = {"threadId": "thread-current", "turnId": "turn-current"}
+        rpc = FakeRpc(
+            [
+                (
+                    "error",
+                    {
+                        **current,
+                        "willRetry": True,
+                        "error": {"message": "Reconnecting", "codexErrorInfo": {}},
+                    },
+                )
+            ]
+        )
+        service = await self._service(rpc)
+        with self.assertRaisesRegex(CodexTransportError, "request_max_retries"):
+            async for _ in service.stream_turn(
+                session_key="app-retry-limit",
+                prompt="hello",
+                model="test-model",
+                request_max_retries=1,
+            ):
+                pass
+        self.assertEqual(len(rpc.interrupts), 1)
+
+    async def test_app_server_never_retries_quota_errors(self):
+        current = {"threadId": "thread-current", "turnId": "turn-current"}
+        rpc = FakeRpc(
+            [
+                (
+                    "error",
+                    {
+                        **current,
+                        "willRetry": True,
+                        "error": {"message": "usage limit exceeded"},
+                    },
+                )
+            ]
+        )
+        service = await self._service(rpc)
+        with self.assertRaises(CodexQuotaError):
+            async for _ in service.stream_turn(
+                session_key="app-quota",
+                prompt="hello",
+                model="test-model",
+                request_max_retries=5,
+            ):
+                pass
+        self.assertEqual(len(rpc.interrupts), 1)
+
+    async def test_app_server_terminal_uses_persisted_turn_delta(self):
+        current = {"threadId": "thread-current", "turnId": "turn-current"}
+        notifications = [
+            (
+                "thread/tokenUsage/updated",
+                {
+                    **current,
+                    "tokenUsage": {
+                        "total": {
+                            "inputTokens": 100,
+                            "cachedInputTokens": 60,
+                            "outputTokens": 20,
+                            "reasoningOutputTokens": 5,
+                            "totalTokens": 120,
+                        },
+                        "last": {"inputTokens": 100, "totalTokens": 120},
+                    },
+                },
+            ),
+            (
+                "item/completed",
+                {
+                    **current,
+                    "item": {
+                        "id": "msg-usage",
+                        "type": "agentMessage",
+                        "phase": "final_answer",
+                        "text": "usage answer",
+                    },
+                },
+            ),
+            (
+                "turn/completed",
+                {
+                    "threadId": "thread-current",
+                    "turn": {"id": "turn-current", "status": "completed", "items": []},
+                },
+            ),
+        ]
+        service = await self._service(FakeRpc(notifications))
+        events = [
+            event
+            async for event in service.stream_turn(
+                session_key="usage-app", prompt="hello", model="test-model"
+            )
+        ]
+        self.assertEqual(events[0]["usage"]["input_tokens"], 100)
+        self.assertEqual(events[0]["usage"]["cached_input_tokens"], 60)
+        self.assertEqual(events[0]["usage"]["output_tokens"], 20)
+        self.assertEqual(events[0]["usage"]["reasoning_tokens"], 5)
+
+    async def test_app_server_rejects_textless_terminal(self):
+        notifications = [
+            (
+                "turn/completed",
+                {
+                    "threadId": "thread-current",
+                    "turn": {"id": "turn-current", "status": "completed", "items": []},
+                },
+            )
+        ]
+        service = await self._service(FakeRpc(notifications))
+        with self.assertRaisesRegex(CodexTransportError, "空白 assistant"):
+            async for _ in service.stream_turn(
+                session_key="empty-app", prompt="hello", model="test-model"
+            ):
+                pass
 
     async def test_non_retryable_error_interrupts_active_turn(self):
         notifications = [
@@ -308,8 +597,12 @@ class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ]
 
-                self.assertEqual(first, [{"kind": "final", "text": "answer-1", "reasoning_signature": None}])
-                self.assertEqual(second, [{"kind": "final", "text": "answer-2", "reasoning_signature": None}])
+                self.assertEqual(
+                    first, [{"kind": "final", "text": "answer-1", "reasoning_signature": None}]
+                )
+                self.assertEqual(
+                    second, [{"kind": "final", "text": "answer-2", "reasoning_signature": None}]
+                )
                 self.assertEqual(fake.calls[0]["previous_response_id"], None)
                 self.assertEqual(len(fake.calls[0]["input_items"]), 2)
                 self.assertEqual(fake.calls[1]["previous_response_id"], None)
@@ -368,7 +661,7 @@ class ServiceStreamingTests(unittest.IsolatedAsyncioTestCase):
                             "type": "function_call_output",
                             "call_id": "call-1",
                             "output": "tool result",
-                        }
+                        },
                     ],
                 )
             finally:

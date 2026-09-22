@@ -17,6 +17,14 @@ class CodexTransportError(CodexPluginError):
     pass
 
 
+class CodexCapabilityError(CodexPluginError):
+    """The selected backend cannot preserve a requested AstrBot capability."""
+
+
+class CodexAuthError(CodexPluginError):
+    pass
+
+
 class CodexTimeoutError(CodexPluginError):
     pass
 
@@ -46,6 +54,23 @@ class CodexRPCError(CodexPluginError):
         )
         return self.code == 429 or any(marker in haystack for marker in markers)
 
+    @property
+    def is_auth(self) -> bool:
+        haystack = f"{self.message} {self.data!s}".lower()
+        markers = (
+            "unauthorized",
+            "authentication",
+            "invalid token",
+            "token is invalid",
+            "token expired",
+            "login required",
+        )
+        return self.code in {401, 403} or any(marker in haystack for marker in markers)
+
 
 def classify_rpc_error(error: CodexRPCError) -> CodexPluginError:
-    return CodexQuotaError(error.message) if error.is_quota else error
+    if error.is_quota:
+        return CodexQuotaError(error.message)
+    if error.is_auth:
+        return CodexAuthError(error.message)
+    return error

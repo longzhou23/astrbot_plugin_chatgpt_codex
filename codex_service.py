@@ -14,7 +14,10 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from .codex_errors import (
+    CodexAuthError,
+    CodexCapabilityError,
     CodexPluginError,
+    CodexQuotaError,
     CodexRPCError,
     CodexTimeoutError,
     CodexTransportError,
@@ -75,6 +78,66 @@ async def _async_timeout(seconds: float):
             raise
     finally:
         handle.cancel()
+
+
+def _request_attempts(value: int | None) -> int:
+    if value is None:
+        return 1
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CodexCapabilityError("request_max_retries 必须是大于等于 1 的整数")
+    return value
+
+
+def _has_tool_state(tools: list[dict[str, Any]] | None, tool_calls_result: Any) -> bool:
+    if tools:
+        return True
+    if tool_calls_result is None:
+        return False
+    if isinstance(tool_calls_result, (list, tuple, set, dict)):
+        return bool(tool_calls_result)
+    return True
+
+
+def _abort_requested(abort_signal: Any) -> bool:
+    is_set = getattr(abort_signal, "is_set", None)
+    return bool(callable(is_set) and is_set())
+
+
+async def _await_or_abort(awaitable: Any, abort_signal: Any, timeout: float | None = None) -> Any:
+    """Await one operation while honoring AstrBot's per-run stop event."""
+
+    if _abort_requested(abort_signal):
+        if hasattr(awaitable, "close"):
+            awaitable.close()
+        raise asyncio.CancelledError("AstrBot request aborted")
+    wait_for_abort = getattr(abort_signal, "wait", None)
+    if not callable(wait_for_abort):
+        return (
+            await asyncio.wait_for(awaitable, timeout) if timeout is not None else await awaitable
+        )
+
+    operation = asyncio.create_task(awaitable)
+    abort_task = asyncio.create_task(wait_for_abort())
+    try:
+        done, _ = await asyncio.wait(
+            {operation, abort_task},
+            timeout=timeout,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if abort_task in done:
+            if not operation.done():
+                operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
+            raise asyncio.CancelledError("AstrBot request aborted")
+        if operation not in done:
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
+            raise asyncio.TimeoutError
+        return operation.result()
+    finally:
+        if not abort_task.done():
+            abort_task.cancel()
+        await asyncio.gather(abort_task, return_exceptions=True)
 
 
 class CodexService:
@@ -419,9 +482,7 @@ class CodexService:
         login_type = "chatgptDeviceCode" if mode == "device_code" else "chatgpt"
         self._last_login_error = None
         try:
-            result = await self._request(
-                "account/login/start", {"type": login_type}, timeout=30
-            )
+            result = await self._request("account/login/start", {"type": login_type}, timeout=30)
         except CodexRPCError as exc:
             message = self._login_error_message(exc)
             self._last_login_error = message
@@ -734,7 +795,10 @@ class CodexService:
         latest = (latest_prompt or "").strip()
         if latest and continuation:
             last = continuation[-1]
-            if last.get("role") == "user" and CodexService._content_text(last.get("content")) == latest:
+            if (
+                last.get("role") == "user"
+                and CodexService._content_text(last.get("content")) == latest
+            ):
                 content = last.get("content")
                 if isinstance(content, list):
                     remaining = [
@@ -1186,6 +1250,10 @@ class CodexService:
         tool_calls_result: Any = None,
         model: str | None = None,
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
+        request_max_retries: int | None = None,
+        abort_signal: Any = None,
+        request_options: dict[str, Any] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Run one turn using the selected backend, with explicit auto fallback."""
 
@@ -1201,6 +1269,10 @@ class CodexService:
                 tool_calls_result=tool_calls_result,
                 model=model,
                 tools=tools,
+                tool_choice=tool_choice,
+                request_max_retries=request_max_retries,
+                abort_signal=abort_signal,
+                request_options=request_options,
             ):
                 yield event
             return
@@ -1217,6 +1289,10 @@ class CodexService:
                 model=model,
                 tools=tools,
                 emit_deltas=True,
+                tool_choice=tool_choice,
+                request_max_retries=request_max_retries,
+                abort_signal=abort_signal,
+                request_options=request_options,
             ):
                 yield event
             return
@@ -1233,12 +1309,27 @@ class CodexService:
                 model=model,
                 tools=tools,
                 emit_deltas=False,
+                tool_choice=tool_choice,
+                request_max_retries=request_max_retries,
+                abort_signal=abort_signal,
+                request_options=request_options,
             ):
                 yield event
         except TransportError as exc:
+            if _has_tool_state(tools, tool_calls_result):
+                raise CodexCapabilityError(
+                    "Responses Transport 失败，App Server 后端暂不支持 AstrBot 工具调用；"
+                    "已阻止自动回退以避免丢失工具状态"
+                ) from exc
+            if request_options:
+                raise CodexCapabilityError(
+                    "Responses Transport 失败，App Server 无法保留本次模型调用参数；已阻止自动回退"
+                ) from exc
             # Transport output is buffered until its terminal event by the
             # provider; falling back here cannot duplicate visible text.
-            self.logger.warning("Transport backend unavailable; falling back to app-server: %s", type(exc).__name__)
+            self.logger.warning(
+                "Transport backend unavailable; falling back to app-server: %s", type(exc).__name__
+            )
             async for event in self._stream_app_server_turn(
                 session_key=session_key,
                 prompt=prompt,
@@ -1250,6 +1341,10 @@ class CodexService:
                 tool_calls_result=tool_calls_result,
                 model=model,
                 tools=tools,
+                tool_choice=tool_choice,
+                request_max_retries=request_max_retries,
+                abort_signal=abort_signal,
+                request_options=request_options,
             ):
                 yield event
 
@@ -1267,6 +1362,10 @@ class CodexService:
         model: str | None = None,
         tools: list[dict[str, Any]] | None = None,
         emit_deltas: bool = True,
+        tool_choice: str = "auto",
+        request_max_retries: int | None = None,
+        abort_signal: Any = None,
+        request_options: dict[str, Any] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Stateless Responses transport; AstrBot supplies the full history."""
 
@@ -1293,11 +1392,7 @@ class CodexService:
             continuation_contexts: list[dict[str, Any]] = []
             input_contexts = contexts
             include_latest = bool(
-                prompt
-                or image_urls
-                or audio_urls
-                or extra_user_content_parts
-                or not input_contexts
+                prompt or image_urls or audio_urls or extra_user_content_parts or not input_contexts
             )
             input_items = build_input_items(
                 input_contexts,
@@ -1310,7 +1405,9 @@ class CodexService:
             )
             input_type_counts: dict[str, int] = {}
             for item in input_items:
-                item_type = str(item.get("type", "unknown")) if isinstance(item, dict) else "unknown"
+                item_type = (
+                    str(item.get("type", "unknown")) if isinstance(item, dict) else "unknown"
+                )
                 input_type_counts[item_type] = input_type_counts.get(item_type, 0) + 1
             context_role_counts: dict[str, int] = {}
             for item in input_contexts or []:
@@ -1347,56 +1444,93 @@ class CodexService:
             response_id: str | None = None
             reasoning_signature: str | None = None
             response_event_types: list[str] = []
+
             async def consume_transport_events(
                 request_items: list[dict[str, Any]],
                 request_previous_id: str | None,
             ) -> AsyncGenerator[dict[str, Any], None]:
-                async for event in self.transport.stream_chat(
+                stream = self.transport.stream_chat(
                     model=selected_model,
                     instructions=instructions,
                     input_items=request_items,
                     effort=self._effort,
                     tools=tools,
+                    tool_choice=tool_choice,
+                    request_options=request_options,
                     prompt_cache_key=hashlib.sha256(session_key.encode("utf-8")).hexdigest(),
                     previous_response_id=request_previous_id,
-                ):
-                    yield event
+                )
+                iterator = stream.__aiter__()
+                try:
+                    while True:
+                        try:
+                            event = await _await_or_abort(anext(iterator), abort_signal)
+                        except StopAsyncIteration:
+                            return
+                        yield event
+                finally:
+                    with contextlib.suppress(Exception):
+                        await stream.aclose()
 
+            attempts = _request_attempts(request_max_retries)
+            emitted_visible_delta = False
             async with _async_timeout(timeout):
-                async for event in consume_transport_events(input_items, None):
-                    if event.get("kind") == "delta":
-                        if emit_deltas:
-                            yield {
-                                "kind": "delta",
-                                "text": str(event.get("text", "")),
-                            }
-                    elif event.get("kind") == "final":
-                        final_text = str(event.get("text", ""))
-                        tool_calls = (
-                            event.get("tool_calls")
-                            if isinstance(event.get("tool_calls"), list)
-                            else []
+                for attempt in range(1, attempts + 1):
+                    final_text = ""
+                    tool_calls = []
+                    usage = None
+                    response_id = None
+                    reasoning_signature = None
+                    response_event_types = []
+                    try:
+                        async for event in consume_transport_events(input_items, None):
+                            if event.get("kind") == "delta":
+                                text = str(event.get("text", ""))
+                                if emit_deltas and text:
+                                    emitted_visible_delta = True
+                                    yield {"kind": "delta", "text": text}
+                            elif event.get("kind") == "final":
+                                final_text = str(event.get("text", ""))
+                                tool_calls = (
+                                    event.get("tool_calls")
+                                    if isinstance(event.get("tool_calls"), list)
+                                    else []
+                                )
+                                usage = (
+                                    event.get("usage")
+                                    if isinstance(event.get("usage"), dict)
+                                    else None
+                                )
+                                response_id = (
+                                    event.get("response_id")
+                                    if isinstance(event.get("response_id"), str)
+                                    else None
+                                )
+                                reasoning_signature = (
+                                    event.get("reasoning_signature")
+                                    if isinstance(event.get("reasoning_signature"), str)
+                                    else None
+                                )
+                                response_event_types = [
+                                    str(item)
+                                    for item in event.get("event_types", [])
+                                    if isinstance(item, str)
+                                ][:32]
+                        break
+                    except TransportError as exc:
+                        can_retry = bool(getattr(exc, "retryable", False))
+                        if not can_retry or attempt >= attempts or emitted_visible_delta:
+                            raise
+                        self.logger.warning(
+                            "Codex transport request failed; retrying (%d/%d): %s",
+                            attempt + 1,
+                            attempts,
+                            type(exc).__name__,
                         )
-                        usage = (
-                            event.get("usage")
-                            if isinstance(event.get("usage"), dict)
-                            else None
+                        await _await_or_abort(
+                            asyncio.sleep(min(5.0, 0.2 * (2 ** min(attempt - 1, 5)))),
+                            abort_signal,
                         )
-                        response_id = (
-                            event.get("response_id")
-                            if isinstance(event.get("response_id"), str)
-                            else None
-                        )
-                        reasoning_signature = (
-                            event.get("reasoning_signature")
-                            if isinstance(event.get("reasoning_signature"), str)
-                            else None
-                        )
-                        response_event_types = [
-                            str(item)
-                            for item in event.get("event_types", [])
-                            if isinstance(item, str)
-                        ][:32]
             if not final_text.strip() and not tool_calls:
                 tool_names = [
                     str(item.get("name"))
@@ -1457,17 +1591,20 @@ class CodexService:
                 increment_turn=True,
             )
             if tool_calls:
-                yield {
+                terminal_event: dict[str, Any] = {
                     "kind": "tool_call",
                     "tool_calls": tool_calls,
                     "reasoning_signature": reasoning_signature,
                 }
             else:
-                yield {
+                terminal_event = {
                     "kind": "final",
                     "text": final_text,
                     "reasoning_signature": reasoning_signature,
                 }
+            if usage is not None:
+                terminal_event["usage"] = usage
+            yield terminal_event
 
     async def _stream_app_server_turn(
         self,
@@ -1482,8 +1619,24 @@ class CodexService:
         tool_calls_result: Any = None,
         model: str | None = None,
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
+        request_max_retries: int | None = None,
+        abort_signal: Any = None,
+        request_options: dict[str, Any] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        del tool_calls_result, tools
+        if _has_tool_state(tools, tool_calls_result):
+            raise CodexCapabilityError(
+                "App Server 后端暂不支持 AstrBot 工具调用；请使用 Responses Transport"
+            )
+        if tool_choice != "auto":
+            raise CodexCapabilityError("App Server 后端暂不支持 tool_choice=required")
+        if request_options:
+            raise CodexCapabilityError(
+                "App Server 后端暂不支持本次模型调用参数：" + ", ".join(sorted(request_options))
+            )
+        max_attempts = (
+            _request_attempts(request_max_retries) if request_max_retries is not None else None
+        )
         timeout = max(30.0, min(3600.0, float(self.config.get("turn_timeout", 600))))
         async with self._turn_slots, self.sessions.lock_for(session_key):
             await self.usage.initialize()
@@ -1509,9 +1662,7 @@ class CodexService:
                     if not isinstance(message, dict) or message.get("role") != "user":
                         continue
                     raw_content = message.get("content")
-                    current_parts = (
-                        raw_content if isinstance(raw_content, list) else [raw_content]
-                    )
+                    current_parts = raw_content if isinstance(raw_content, list) else [raw_content]
                     user_text = self._content_text(raw_content).strip()
                     try:
                         from .transport.responses import _attachment_marker
@@ -1525,9 +1676,7 @@ class CodexService:
                         pass
                     break
             if current_attachment_markers:
-                user_text = "\n".join(
-                    [user_text, *current_attachment_markers]
-                ).strip()
+                user_text = "\n".join([user_text, *current_attachment_markers]).strip()
             user_text = user_text or "(The user sent an empty message.)"
             extra_text = self._extra_text(extra_user_content_parts)
             if extra_text:
@@ -1624,7 +1773,11 @@ class CodexService:
                     params["model"] = selected_model
                 if self._effort != "auto":
                     params["effort"] = self._effort
-                result = await rpc.request("turn/start", params, timeout=30)
+                result = await _await_or_abort(
+                    rpc.request("turn/start", params, timeout=30),
+                    abort_signal,
+                    timeout=30,
+                )
                 turn = result.get("turn") if isinstance(result, dict) else None
                 if isinstance(turn, dict):
                     turn_id = turn.get("id")
@@ -1645,7 +1798,9 @@ class CodexService:
                     if remaining <= 0:
                         raise CodexTimeoutError("Codex turn timed out")
                     try:
-                        method, event_params = await asyncio.wait_for(queue.get(), remaining)
+                        method, event_params = await _await_or_abort(
+                            queue.get(), abort_signal, timeout=remaining
+                        )
                     except TimeoutError as exc:
                         raise CodexTimeoutError("Codex turn timed out") from exc
                     if self._notification_turn_id(event_params) != turn_id:
@@ -1673,18 +1828,25 @@ class CodexService:
                             yield {"kind": "status", "text": f"[{item.get('type')} started]"}
                         continue
                     if method == "error":
-                        if bool(event_params.get("willRetry")):
-                            retry_count += 1
-                            if self.config.get("show_tool_status", False):
-                                yield {"kind": "status", "text": "[Codex reconnecting]"}
-                            continue
                         error = event_params.get("error")
                         error_text = (
                             f"{error.get('message', error)} {error.get('codexErrorInfo', '')}"
                             if isinstance(error, dict)
                             else str(error or "Codex turn failed")
                         )
-                        raise classify_rpc_error(CodexRPCError(None, safe_error(error_text)))
+                        classified = classify_rpc_error(CodexRPCError(None, safe_error(error_text)))
+                        if isinstance(classified, (CodexQuotaError, CodexAuthError)):
+                            raise classified
+                        if bool(event_params.get("willRetry")):
+                            retry_count += 1
+                            if max_attempts is not None and retry_count >= max_attempts:
+                                raise CodexTransportError(
+                                    "Codex App Server 已达到 request_max_retries 上限"
+                                )
+                            if self.config.get("show_tool_status", False):
+                                yield {"kind": "status", "text": "[Codex reconnecting]"}
+                            continue
+                        raise classified
                     if method == "thread/tokenUsage/updated":
                         _, event_turn_id, snapshot = parse_usage_snapshot_event(event_params)
                         if snapshot is not None and event_turn_id == turn_id:
@@ -1710,6 +1872,8 @@ class CodexService:
                         if not final_text:
                             final_text = self._final_agent_text(completed_agent_items)
                         completed = True
+                if not final_text.strip():
+                    raise CodexTransportError("Codex App Server 返回空白 assistant 响应")
                 await self.sessions.put(
                     session_key,
                     thread_id,
@@ -1740,18 +1904,28 @@ class CodexService:
                         self._safe_identifier(thread_id),
                         self._safe_identifier(turn_id),
                     )
+                turn_usage = (
+                    usage_diagnostic.get("delta")
+                    if isinstance(usage_diagnostic, dict)
+                    and isinstance(usage_diagnostic.get("delta"), dict)
+                    else None
+                )
                 self._last_turn = {
                     "thread_reused": bool(self._thread_reused.get(session_key, False)),
                     "model": selected_model,
                     "reasoning_effort": self._effort,
                     "retry_count": retry_count,
                     "latency_ms": round((time.monotonic() - turn_started_at) * 1000, 1),
-                    "usage": snapshot.as_dict() if snapshot else None,
+                    "usage": turn_usage,
+                    "usage_snapshot": snapshot.as_dict() if snapshot else None,
                     "usage_diagnostic": usage_diagnostic,
                     "context_diagnostics": context_diagnostics,
                     "prompt_version": prompt_version,
                 }
-                yield {"kind": "final", "text": final_text}
+                terminal_event = {"kind": "final", "text": final_text}
+                if turn_usage is not None:
+                    terminal_event["usage"] = turn_usage
+                yield terminal_event
             finally:
                 if turn_id:
                     self._active_turns.pop(turn_id, None)

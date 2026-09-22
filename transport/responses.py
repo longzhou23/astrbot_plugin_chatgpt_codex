@@ -203,10 +203,7 @@ def _attachment_marker(part: dict[str, Any]) -> str | None:
         return "[引用消息]"
     if part_type in {"file", "input_file", "file_url", "file_attachment", "document"}:
         filename = (
-            part.get("filename")
-            or part.get("file_name")
-            or part.get("name")
-            or part.get("title")
+            part.get("filename") or part.get("file_name") or part.get("name") or part.get("title")
         )
         return f"[文件附件：{_safe_label(filename)}]"
     if part_type in {"video", "input_video", "video_url"}:
@@ -409,7 +406,9 @@ def build_input_items(
             call_id = message.get("tool_call_id")
             if isinstance(call_id, str) and call_id:
                 output = _tool_output_value(message.get("content", ""))
-                result.append({"type": "function_call_output", "call_id": call_id, "output": output})
+                result.append(
+                    {"type": "function_call_output", "call_id": call_id, "output": output}
+                )
             continue
         # System/developer messages are promoted to the top-level
         # ``instructions`` field by CodexService. Forwarding developer here as
@@ -464,7 +463,9 @@ def build_input_items(
             call_id = message.get("tool_call_id")
             if isinstance(call_id, str) and call_id:
                 output = _tool_output_value(message.get("content", ""))
-                result.append({"type": "function_call_output", "call_id": call_id, "output": output})
+                result.append(
+                    {"type": "function_call_output", "call_id": call_id, "output": output}
+                )
         elif role == "assistant":
             result.extend(_function_call_items(message.get("tool_calls")))
     return _deduplicate_input_media(result)
@@ -519,6 +520,8 @@ def response_request(
     input_items: list[dict[str, Any]],
     effort: str = "auto",
     tools: list[dict[str, Any]] | None = None,
+    tool_choice: str = "auto",
+    request_options: dict[str, Any] | None = None,
     prompt_cache_key: str | None = None,
     previous_response_id: str | None = None,
 ) -> dict[str, Any]:
@@ -528,7 +531,7 @@ def response_request(
         "model": model,
         "instructions": instructions,
         "input": input_items,
-        "tool_choice": "auto",
+        "tool_choice": tool_choice,
         "parallel_tool_calls": True,
         "store": False,
         "stream": True,
@@ -540,6 +543,15 @@ def response_request(
         payload["reasoning"] = {"effort": effort, "summary": "auto"}
     if tools:
         payload["tools"] = tools
+    for key, value in (request_options or {}).items():
+        if key in {
+            "temperature",
+            "top_p",
+            "max_output_tokens",
+            "parallel_tool_calls",
+            "text",
+        }:
+            payload[key] = value
     if prompt_cache_key:
         payload["prompt_cache_key"] = prompt_cache_key
     if previous_response_id:
@@ -706,7 +718,10 @@ def parse_sse_data(data: str, result: TransportResponse) -> bool:
     """Apply one Responses SSE data object; return True at terminal completion."""
 
     if data.strip() in {"", "[DONE]"}:
-        return data.strip() == "[DONE]"
+        if data.strip() == "[DONE]":
+            result.terminal_type = result.terminal_type or "done"
+            return True
+        return False
     try:
         event = json.loads(data)
     except json.JSONDecodeError:
@@ -790,13 +805,10 @@ def parse_sse_data(data: str, result: TransportResponse) -> bool:
                 if isinstance(item, dict):
                     _consume_output_item(result, item)
         result.usage = TransportUsage.from_response(response.get("usage"))
+        result.terminal_type = "completed"
         return True
-    elif kind in {"response.refusal.done", "response.failed", "response.incomplete", "error"}:
-        if (
-            kind == "response.refusal.done"
-            and isinstance(event.get("text"), str)
-            and not result.text
-        ):
+    elif kind == "response.refusal.done":
+        if isinstance(event.get("text"), str) and not result.text:
             result.text = event["text"]
         output = response.get("output")
         if isinstance(output, list):
@@ -805,5 +817,36 @@ def parse_sse_data(data: str, result: TransportResponse) -> bool:
                     _consume_output_item(result, item)
         if response:
             result.usage = TransportUsage.from_response(response.get("usage"))
+        # A conforming Responses stream normally emits response.completed after
+        # refusal.done. Keep reading for the authoritative usage payload, while
+        # still allowing compatible servers that close immediately afterwards.
+        result.terminal_type = "refusal"
+        return False
+    elif kind in {"response.failed", "response.incomplete", "error"}:
+        output = response.get("output")
+        if isinstance(output, list):
+            for item in output:
+                if isinstance(item, dict):
+                    _consume_output_item(result, item)
+        if response:
+            result.usage = TransportUsage.from_response(response.get("usage"))
+        result.terminal_type = kind
+        if kind == "response.incomplete":
+            details = response.get("incomplete_details")
+            reason = details.get("reason") if isinstance(details, dict) else None
+            result.terminal_error = (
+                f"Codex transport 响应未完成：{reason}"
+                if isinstance(reason, str) and reason
+                else "Codex transport 响应未完成"
+            )
+        elif kind == "response.failed":
+            result.terminal_error = "Codex transport 响应失败"
+        else:
+            code = event.get("code")
+            result.terminal_error = (
+                f"Codex transport SSE 错误：{code}"
+                if isinstance(code, str) and code
+                else "Codex transport SSE 错误"
+            )
         return True
     return False

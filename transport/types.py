@@ -30,6 +30,12 @@ class TransportNetworkError(TransportError):
     retryable = True
 
 
+class TransportServerError(TransportError):
+    """A transient 5xx response that may be retried within the caller limit."""
+
+    retryable = True
+
+
 class TransportModeError(TransportError):
     """The selected mode cannot be used in the current environment."""
 
@@ -48,7 +54,9 @@ class TransportUsage:
         if not isinstance(value, dict):
             return None
         details = value.get("input_tokens_details") or value.get("inputTokensDetails") or {}
-        output_details = value.get("output_tokens_details") or value.get("outputTokensDetails") or {}
+        output_details = (
+            value.get("output_tokens_details") or value.get("outputTokensDetails") or {}
+        )
 
         def number(*keys: str) -> int | None:
             for key in keys:
@@ -105,6 +113,8 @@ class TransportResponse:
     reasoning_signature: str | None = None
     rate_limits: dict[str, Any] = field(default_factory=dict)
     event_count: int = 0
+    terminal_type: str | None = None
+    terminal_error: str | None = None
     # Function-call arguments arrive over several SSE events. This is an
     # internal accumulator and is never serialized into user-visible output.
     function_call_state: dict[str, dict[str, str]] = field(

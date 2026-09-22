@@ -22,6 +22,7 @@ from .types import (
     TransportProtocolError,
     TransportQuotaError,
     TransportResponse,
+    TransportServerError,
 )
 
 
@@ -128,7 +129,9 @@ class CodexTransportClient:
         await self.auth.snapshot(refresh=False)
         return {"rateLimits": dict(self._rate_limits), "source": "responses_headers"}
 
-    def _headers(self, access_token: str, account_id: str | None, *, stream: bool = False) -> dict[str, str]:
+    def _headers(
+        self, access_token: str, account_id: str | None, *, stream: bool = False
+    ) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "text/event-stream" if stream else "application/json",
@@ -189,6 +192,8 @@ class CodexTransportClient:
         input_items: list[dict[str, Any]],
         effort: str = "auto",
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
+        request_options: dict[str, Any] | None = None,
         prompt_cache_key: str | None = None,
         previous_response_id: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
@@ -199,6 +204,8 @@ class CodexTransportClient:
             input_items=input_items,
             effort=effort,
             tools=tools,
+            tool_choice=tool_choice,
+            request_options=request_options,
             prompt_cache_key=prompt_cache_key,
             previous_response_id=previous_response_id,
         )
@@ -218,7 +225,10 @@ class CodexTransportClient:
                 if exc.code == 429:
                     raise TransportQuotaError("Codex transport 配额或速率限制") from exc
                 raw = exc.read(4096)
-                raise self._http_error(exc.code, raw) from exc
+                error = self._http_error(exc.code, raw)
+                if 500 <= exc.code < 600:
+                    raise TransportServerError(str(error)) from exc
+                raise error from exc
             except (URLError, TimeoutError, OSError) as exc:
                 raise TransportNetworkError("Codex transport 连接失败") from exc
 
@@ -254,6 +264,10 @@ class CodexTransportClient:
                 parse_sse_data("\n".join(data_lines), result)
             if result.event_count == 0:
                 raise TransportProtocolError("Codex transport 没有返回 SSE 事件")
+            if result.terminal_error:
+                raise TransportProtocolError(result.terminal_error)
+            if result.terminal_type is None:
+                raise TransportProtocolError("Codex transport 流在终态事件前结束")
             yield {
                 "kind": "final",
                 "text": result.text,
