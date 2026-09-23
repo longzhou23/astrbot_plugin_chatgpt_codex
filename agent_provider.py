@@ -20,7 +20,11 @@ try:
     from astrbot.core.agent.tool import ToolSet
     from astrbot.core.provider.entities import LLMResponse
     from astrbot.core.provider.entities import TokenUsage as AstrBotTokenUsage
-    from astrbot.core.provider.register import register_provider_adapter
+    from astrbot.core.provider.register import (
+        provider_cls_map,
+        provider_registry,
+        register_provider_adapter,
+    )
 
     _ASTRBOT_AVAILABLE = True
 except ImportError:  # pragma: no cover
@@ -413,8 +417,27 @@ async def _collect_provider_response(
 
 if _ASTRBOT_AVAILABLE:
 
+    # AstrBot purges plugin modules during reload, but its provider adapter
+    # registry is process-global and has no matching unregister hook. Remove
+    # only a previous registration created by this exact module so a genuine
+    # name collision with another plugin still raises from the decorator.
+    _provider_type_name = "chatgpt_codex"
+    _existing_provider = provider_cls_map.get(_provider_type_name)
+    _existing_provider_cls = getattr(_existing_provider, "cls_type", None)
+    if getattr(_existing_provider_cls, "__module__", None) == __name__:
+        provider_cls_map.pop(_provider_type_name, None)
+        provider_registry[:] = [
+            metadata
+            for metadata in provider_registry
+            if not (
+                getattr(metadata, "type", None) == _provider_type_name
+                and getattr(getattr(metadata, "cls_type", None), "__module__", None)
+                == __name__
+            )
+        ]
+
     @register_provider_adapter(
-        "chatgpt_codex",
+        _provider_type_name,
         "Official Codex App Server bridge using the current ChatGPT account login",
         default_config_tmpl={
             "type": "chatgpt_codex",
