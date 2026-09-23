@@ -25,6 +25,10 @@ from .types import (
     TransportServerError,
 )
 
+# The Codex models endpoint gates its catalog by client_version; keep this
+# aligned with the current stable Codex release so newly available models show.
+DEFAULT_CLIENT_VERSION = "0.156.0"
+
 
 class CodexTransportClient:
     """Direct Codex Responses HTTP/SSE client.
@@ -39,7 +43,7 @@ class CodexTransportClient:
         *,
         base_url: str = "https://chatgpt.com/backend-api/codex",
         timeout: float = 600,
-        client_version: str = "0.146.0",
+        client_version: str = DEFAULT_CLIENT_VERSION,
         proxy_url: str = "",
         use_system_proxy: bool = True,
     ) -> None:
@@ -137,7 +141,7 @@ class CodexTransportClient:
             "Accept": "text/event-stream" if stream else "application/json",
             "Content-Type": "application/json",
             "originator": "codex_cli_rs",
-            "User-Agent": "codex_cli_rs/0.146.0",
+            "User-Agent": f"codex_cli_rs/{self.client_version}",
         }
         if account_id:
             headers["ChatGPT-Account-ID"] = account_id
