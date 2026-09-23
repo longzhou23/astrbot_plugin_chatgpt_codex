@@ -1,13 +1,27 @@
 # Changelog / 更新日志
 
-本文件按仓库实际提交历史整理。当前正式发布版本为 `v1.0.0`；
+本文件按仓库实际提交历史整理。当前正式发布版本为 `v1.0.1`；
 `v0.3.0-beta.1` 和 `v0.3.0-beta.2` 是此前的公开 Beta 标签；`0.1.0` 和
 `0.2.0` 是对应历史阶段的开发里程碑，并不是曾经单独发布过的公开标签。
 
 This changelog follows the repository's actual commit history. The current
-formal release is `v1.0.0`; `v0.3.0-beta.1` and `v0.3.0-beta.2` were the public
+formal release is `v1.0.1`; `v0.3.0-beta.1` and `v0.3.0-beta.2` were the public
 Beta tags, while `0.1.0` and `0.2.0` are historical development milestones,
 not separately published public tags.
+
+## 1.0.1 — 2026-09-23 / 修复更新
+
+### 中文
+
+- 修复 Codex 模型列表不会随授权及配置状态自动刷新的问题，并增强 AstrBot Provider 与 Agent Runner 的兼容性。
+- 修复插件重启、更新或重载后重复注册 Provider、导致名称冲突的问题。
+- 将 Codex Transport 客户端版本更新至 `0.156.0`，使模型发现接口能返回当前可用的 GPT-6 系列模型。
+
+### English
+
+- Fixed Codex model lists failing to refresh automatically after authorization or configuration changes, and improved compatibility with AstrBot providers and the Agent Runner.
+- Fixed provider name conflicts caused by duplicate registration after plugin restart, update, or reload.
+- Updated the Codex Transport client version to `0.156.0`, allowing model discovery to return the currently available GPT-6 series models.
 
 ## 1.0.0 — 2026-08-28 / 正式版
 
