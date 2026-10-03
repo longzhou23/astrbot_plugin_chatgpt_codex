@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -77,6 +78,54 @@ _SUPPORTED_REQUEST_OPTIONS = {
 def bind_service(service: CodexService) -> None:
     global _SERVICE
     _SERVICE = service
+
+
+def unbind_service(service: CodexService) -> None:
+    """Do not let an older instance disconnect a newly loaded plugin."""
+    global _SERVICE
+    if _SERVICE is service:
+        _SERVICE = None
+
+
+def unregister_provider_adapter(expected_cls: type | None = None) -> None:
+    """Remove only this plugin's registrations, including uninstall leftovers.
+
+    AstrBot's module purge does not unregister model providers. Class identity
+    protects a new registration when an older plugin instance finishes closing.
+    """
+    if not _ASTRBOT_AVAILABLE:
+        return
+
+    def owned(metadata: Any) -> bool:
+        cls = getattr(metadata, "cls_type", None)
+        module = getattr(cls, "__module__", "")
+        # Older deployments left Git-hash backup copies in AstrBot's scanned
+        # plugin directory. Those copies register this adapter under a different
+        # module name, and survive even after their directory is removed.
+        own_module = module == __name__ or (
+            getattr(cls, "__name__", None) == "CodexProvider"
+            and isinstance(module, str)
+            and re.fullmatch(
+                r"data\.plugins\.backup-astrbot_plugin_chatgpt_codex-[0-9a-f]{7,40}\.agent_provider",
+                module,
+            ) is not None
+        )
+        return (
+            getattr(metadata, "type", None) == "chatgpt_codex"
+            and own_module
+            and (expected_cls is None or cls is expected_cls)
+        )
+
+    if owned(provider_cls_map.get("chatgpt_codex")):
+        provider_cls_map.pop("chatgpt_codex", None)
+    provider_registry[:] = [metadata for metadata in provider_registry if not owned(metadata)]
+
+
+def release_service(service: CodexService) -> None:
+    """Unregister on unload even if closing the service raised an error."""
+    if _SERVICE is service:
+        unregister_provider_adapter(globals().get("CodexProvider"))
+        unbind_service(service)
 
 
 def _astrbot_token_usage(value: Any) -> AstrBotTokenUsage | None:
@@ -422,19 +471,13 @@ if _ASTRBOT_AVAILABLE:
     # only a previous registration created by this exact module so a genuine
     # name collision with another plugin still raises from the decorator.
     _provider_type_name = "chatgpt_codex"
-    _existing_provider = provider_cls_map.get(_provider_type_name)
-    _existing_provider_cls = getattr(_existing_provider, "cls_type", None)
-    if getattr(_existing_provider_cls, "__module__", None) == __name__:
-        provider_cls_map.pop(_provider_type_name, None)
-        provider_registry[:] = [
-            metadata
-            for metadata in provider_registry
-            if not (
-                getattr(metadata, "type", None) == _provider_type_name
-                and getattr(getattr(metadata, "cls_type", None), "__module__", None)
-                == __name__
-            )
-        ]
+    unregister_provider_adapter()
+    if _provider_type_name in provider_cls_map:
+        registered_cls = getattr(provider_cls_map[_provider_type_name], "cls_type", None)
+        raise ValueError(
+            "chatgpt_codex 适配器名称冲突：现有注册来自 "
+            f"{getattr(registered_cls, '__module__', 'unknown')}；当前模块为 {__name__}"
+        )
 
     @register_provider_adapter(
         _provider_type_name,

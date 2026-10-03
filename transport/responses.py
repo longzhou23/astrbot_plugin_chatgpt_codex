@@ -544,10 +544,12 @@ def response_request(
     if tools:
         payload["tools"] = tools
     for key, value in (request_options or {}).items():
+        # AstrBot plugins use Chat Completions options (e.g. segmentation passes
+        # temperature and max_tokens). The ChatGPT Codex subscription endpoint
+        # rejects temperature, top_p and max_output_tokens even though the
+        # general Responses API accepts them. Accept caller defaults, but only
+        # serialize options supported by this endpoint; do not retry HTTP 400.
         if key in {
-            "temperature",
-            "top_p",
-            "max_output_tokens",
             "parallel_tool_calls",
             "text",
         }:

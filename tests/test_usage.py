@@ -4,8 +4,9 @@ import asyncio
 import sqlite3
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from ..usage.aggregate import heat_level
 from ..usage.models import (
@@ -171,6 +172,9 @@ class UsageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await storage.rows("2026-08-25", "2026-08-25")), [])
 
     async def test_deduplicates_turn_after_restart(self) -> None:
+        clock = patch.object(self.service, "_today", return_value=date(2026, 8, 25))
+        clock.start()
+        self.addCleanup(clock.stop)
         kwargs = {
             "conversation_id": "private-session-id",
             "thread_id": "thread-1",
@@ -221,6 +225,9 @@ class UsageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row["cached_input_tokens"], 20)
 
     async def test_timezone_boundary_and_daily_aggregation(self) -> None:
+        clock = patch.object(self.service, "_today", return_value=date(2026, 8, 25))
+        clock.start()
+        self.addCleanup(clock.stop)
         # 16:30 UTC is 00:30 on the next day in Asia/Shanghai.
         await self.service.record_turn_usage(
             conversation_id="session",

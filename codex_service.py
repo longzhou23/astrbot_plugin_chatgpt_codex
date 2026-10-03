@@ -672,6 +672,7 @@ class CodexService:
                 key: result.get(key)
                 for key in (
                     "rateLimits",
+                    "rateLimitsByLimitId",
                     "individualLimit",
                     "spendControlReached",
                     "rateLimitResetCredits",

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from .agent_provider import bind_service
+from .agent_provider import bind_service, release_service
 from .codex_errors import safe_error
 from .codex_service import CodexService
 
@@ -454,7 +454,10 @@ class ChatgptCodexPlugin(Star):
             return self._web_error(exc)
 
     async def terminate(self) -> None:
-        await self.service.close()
+        try:
+            await self.service.close()
+        finally:
+            release_service(self.service)
 
     @staticmethod
     def _fmt(value: Any) -> str:

@@ -9,6 +9,19 @@ formal release is `v1.0.1`; `v0.3.0-beta.1` and `v0.3.0-beta.2` were the public
 Beta tags, while `0.1.0` and `0.2.0` are historical development milestones,
 not separately published public tags.
 
+## 1.0.3 — 2026-10-03 / 源码修复，尚未创建发布标签
+
+- 修复智能分段等 AstrBot 插件传入 `temperature`、`top_p` 或 `max_tokens` 时，Codex 订阅 Transport 返回 HTTP 400 的问题。
+- 在 HTTP 请求构建处排除该订阅接口不支持的 `temperature`、`top_p`、`max_output_tokens`；这些通用调用选项仍会校验，但不会在 Codex 订阅接口生效。保留工具选择、并行工具开关与结构化输出参数。
+
+## 1.0.2 — 2026-10-03 / 源码修复，未单独创建发布标签
+
+- 卸载时释放本插件的 Provider 注册与服务绑定；重装时回收同模块遗留注册，保留其他插件的真实命名冲突检查。
+- 兼容旧部署中误加载的 `backup-astrbot_plugin_chatgpt_codex-<Git哈希>` 备份副本留下的注册。
+- 按 `windowDurationMins` 匹配 5 小时与 7 天额度，不再把 `primary`、`secondary` 固定映射为窗口；修复 pro100、pro200 的周限额错放到 5 小时卡片的问题。
+- 保留官方 `rateLimitsByLimitId` 返回字段，展示时优先读取 `codex` 桶；缺失窗口与缺失使用百分比显示不可用。
+- 增加卸载重装与配额卡片回归检查，并固定两项历史 usage 测试的日期。
+
 ## 1.0.1 — 2026-09-23 / 修复更新
 
 ### 中文

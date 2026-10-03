@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from ..model_catalog import CodexModel
+from ..agent_provider import _normalize_request_options
 from ..transport.client import CodexTransportClient
 from ..transport.models import parse_transport_models
 from ..transport.responses import build_input_items, parse_sse_data, response_request
@@ -16,6 +19,45 @@ from ..transport.types import (
     TransportToolCall,
     TransportUsage,
 )
+
+
+class SubscriptionRequestTests(unittest.IsolatedAsyncioTestCase):
+    async def test_segmentation_options_are_filtered_in_actual_http_request(self):
+        options = _normalize_request_options({"temperature": 0.2, "max_tokens": 128})
+        completed = {
+            "type": "response.completed",
+            "response": {
+                "id": "resp-segment",
+                "output": [{"type": "message", "content": [
+                    {"type": "output_text", "text": '["first", "second"]'},
+                ]}],
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            },
+        }
+        outgoing = []
+
+        def open_request(request, *, timeout):
+            payload = json.loads(request.data)
+            outgoing.append(payload)
+            for key in ("temperature", "top_p", "max_tokens", "max_output_tokens"):
+                self.assertNotIn(key, payload)
+            self.assertEqual(payload["input"], [{"role": "user", "content": "segment"}])
+            self.assertEqual(payload["instructions"], "Return segments as JSON")
+            return io.BytesIO(("data: " + json.dumps(completed) + "\n\n").encode())
+
+        with tempfile.TemporaryDirectory() as directory:
+            client = CodexTransportClient(Path(directory))
+            with patch.object(client.auth, "snapshot", new=AsyncMock(return_value=
+                    SimpleNamespace(access_token="test-token", account_id=None))), \
+                    patch.object(client, "_open", side_effect=open_request):
+                events = [event async for event in client.stream_chat(
+                    model="test-model", instructions="Return segments as JSON",
+                    input_items=[{"role": "user", "content": "segment"}],
+                    request_options=options,
+                )]
+        self.assertEqual(len(outgoing), 1)
+        self.assertEqual(events[-1]["kind"], "final")
+        self.assertEqual(events[-1]["text"], '["first", "second"]')
 
 
 class TransportTests(unittest.TestCase):
@@ -66,6 +108,7 @@ class TransportTests(unittest.TestCase):
             tool_choice="required",
             request_options={
                 "temperature": 0.1,
+                "top_p": 0.8,
                 "max_output_tokens": 128,
                 "parallel_tool_calls": False,
                 "text": {"format": {"type": "json_object"}},
@@ -73,7 +116,8 @@ class TransportTests(unittest.TestCase):
             },
         )
         self.assertEqual(payload["tool_choice"], "required")
-        self.assertEqual(payload["max_output_tokens"], 128)
+        for unsupported in ("temperature", "top_p", "max_output_tokens"):
+            self.assertNotIn(unsupported, payload)
         self.assertFalse(payload["parallel_tool_calls"])
         self.assertNotIn("ignored", payload)
 
