@@ -3,6 +3,6 @@ display_name: ChatGPT Codex 订阅模型
 desc: 通过 Codex Transport 或官方 Codex App Server，在 AstrBot 中使用 ChatGPT 账号可用的 Codex 模型。
 description: 通过 Codex Transport 或官方 Codex App Server，在 AstrBot 中使用 ChatGPT 账号可用的 Codex 模型。
 author: Longzhooou
-version: 1.0.3
+version: 1.0.4
 repo: https://github.com/longzhou23/astrbot_plugin_chatgpt_codex
 astrbot_version: ">=4.13.0"

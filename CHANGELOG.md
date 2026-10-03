@@ -1,13 +1,19 @@
 # Changelog / 更新日志
 
-本文件按仓库实际提交历史整理。当前正式发布版本为 `v1.0.3`；
+本文件按仓库实际提交历史整理。当前正式发布版本为 `v1.0.4`；
 `v0.3.0-beta.1` 和 `v0.3.0-beta.2` 是此前的公开 Beta 标签；`0.1.0` 和
 `0.2.0` 是对应历史阶段的开发里程碑，并不是曾经单独发布过的公开标签。
 
 This changelog follows the repository's actual commit history. The current
-formal release is `v1.0.3`; `v0.3.0-beta.1` and `v0.3.0-beta.2` were the public
+formal release is `v1.0.4`; `v0.3.0-beta.1` and `v0.3.0-beta.2` were the public
 Beta tags, while `0.1.0` and `0.2.0` are historical development milestones,
 not separately published public tags.
+
+## 1.0.4 — 2026-10-03 / 发布版本更新
+
+- AstrBot Cloud 提示 `1.0.3` 版本号已使用，不能重复提交；使用新版本号 `1.0.4` 发布。
+- 包含 `1.0.3` 的全部修复：重装适配器注册冲突、pro100/pro200 配额窗口错位，以及智能分段请求参数导致的 HTTP 400。
+- 本次仅更新版本元数据和发布文档，运行代码与 `1.0.3` 相同。保留已发布的 `v1.0.3` 标签与安装包。
 
 ## 1.0.3 — 2026-10-03 / 修复更新
 
