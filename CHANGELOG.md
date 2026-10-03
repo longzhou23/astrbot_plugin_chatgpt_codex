@@ -1,15 +1,17 @@
 # Changelog / 更新日志
 
-本文件按仓库实际提交历史整理。当前正式发布版本为 `v1.0.1`；
+本文件按仓库实际提交历史整理。当前正式发布版本为 `v1.0.3`；
 `v0.3.0-beta.1` 和 `v0.3.0-beta.2` 是此前的公开 Beta 标签；`0.1.0` 和
 `0.2.0` 是对应历史阶段的开发里程碑，并不是曾经单独发布过的公开标签。
 
 This changelog follows the repository's actual commit history. The current
-formal release is `v1.0.1`; `v0.3.0-beta.1` and `v0.3.0-beta.2` were the public
+formal release is `v1.0.3`; `v0.3.0-beta.1` and `v0.3.0-beta.2` were the public
 Beta tags, while `0.1.0` and `0.2.0` are historical development milestones,
 not separately published public tags.
 
-## 1.0.3 — 2026-10-03 / 源码修复，尚未创建发布标签
+## 1.0.3 — 2026-10-03 / 修复更新
+
+本次正式发布同时包含下列 `1.0.2` 开发阶段修复；`1.0.2` 未单独发布标签。
 
 - 修复智能分段等 AstrBot 插件传入 `temperature`、`top_p` 或 `max_tokens` 时，Codex 订阅 Transport 返回 HTTP 400 的问题。
 - 在 HTTP 请求构建处排除该订阅接口不支持的 `temperature`、`top_p`、`max_output_tokens`；这些通用调用选项仍会校验，但不会在 Codex 订阅接口生效。保留工具选择、并行工具开关与结构化输出参数。

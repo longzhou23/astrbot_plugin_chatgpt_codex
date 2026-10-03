@@ -7,7 +7,7 @@ Built on the official Codex sign-in flow, with a lightweight Responses transport
 
 [简体中文](README.md)
 
-[![Version](https://img.shields.io/badge/version-v1.0.1-blue)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex/releases)
+[![Version](https://img.shields.io/badge/version-v1.0.3-blue)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex/releases)
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D%204.13.0-blue)](https://github.com/AstrBotDevs/AstrBot)
 [![Codex](https://img.shields.io/badge/backend-OpenAI%20Codex-black)](https://github.com/openai/codex)
 [![Status](https://img.shields.io/badge/status-Stable-brightgreen)](https://github.com/longzhou23/astrbot_plugin_chatgpt_codex)
@@ -146,7 +146,7 @@ If the AstrBot service account cannot resolve `codex`, set `codex_path` in the p
 ### 2. Install the plugin
 
 ```bash
-git clone --branch v1.0.1 --depth 1 \
+git clone --branch v1.0.3 --depth 1 \
   https://github.com/longzhou23/astrbot_plugin_chatgpt_codex.git
 ```
 
@@ -636,7 +636,7 @@ The test suite covers authentication safety, Provider behavior, cache optimizati
 
 ## ✅ Stable release
 
-Current release: **`v1.0.1`**.
+Current release: **`v1.0.3`**.
 
 Keep in mind:
 
